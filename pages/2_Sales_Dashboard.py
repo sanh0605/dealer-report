@@ -37,7 +37,7 @@ df[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]] =
 )
 
 # Join with dealer_master to get region
-if not dealer_rows:
+if dealer_rows:
     dealer_df = pd.DataFrame([r.__dict__ for r in dealer_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
     df = df.merge(dealer_df[["dealer_id", "region", "province"]], on="dealer_id", how="left")
 else:
@@ -45,7 +45,7 @@ else:
     df["province"] = ""
 
 # Join with product_master to get brand_group
-if not product_rows:
+if product_rows:
     product_df = pd.DataFrame([r.__dict__ for r in product_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
     df = df.merge(product_df[["item_id", "brand_group", "brand", "category"]], on="item_id", how="left")
 else:
