@@ -27,3 +27,29 @@ def test_sale_records_columns(engine):
     assert "sales_revenue" in cols
     assert "cost_of_goods" in cols
     assert "unit_price_standard" in cols
+
+def test_seed_creates_three_users(engine):
+    from sqlalchemy.orm import sessionmaker
+    from database.seed import seed_users
+    from database.models import User
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    seed_users(db)
+    users = db.query(User).all()
+    assert len(users) == 3
+    roles = {u.role for u in users}
+    assert roles == {"Admin", "Manager", "Sales Staff"}
+    db.close()
+
+def test_seed_passwords_are_hashed(engine):
+    from sqlalchemy.orm import sessionmaker
+    from database.seed import seed_users
+    from database.models import User
+    import bcrypt
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    seed_users(db)
+    admin = db.query(User).filter_by(role="Admin").first()
+    assert admin.password_hash != "admin123"
+    assert bcrypt.checkpw(b"admin123", admin.password_hash.encode())
+    db.close()
