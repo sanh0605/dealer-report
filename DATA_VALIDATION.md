@@ -116,7 +116,7 @@
 | `item_id` | Text, not empty, must exist in product_master | ✅ Yes |
 | `stock_on_hand` | Integer (can be positive/negative) | ✅ Yes |
 | `location` | Text, not empty | ✅ Yes |
-| `location_region` | Must be: Miền Bắc, Miền Trung, Miền Nam | ❌ Optional |
+| `location_region` | Must be: Miền Bắc, Miền Trung, Miền Nam | ✅ Yes |
 
 ---
 

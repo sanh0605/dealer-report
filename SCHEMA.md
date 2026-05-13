@@ -98,13 +98,15 @@
 | `sub_region` | Text | Sales territory code (e.g. "MN1", "MN2"). |
 | `target_revenue` | Float | Revenue goal in VND for this sub-region/month. |
 
+> **Note:** For sub_region validation workflow when value doesn't exist in dealer_master, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md) (Data Validation Rules section).
+
 ### 6. Inventory Status Table (`inventory_status`)
 | Column | Type | Source / Logic |
 | :--- | :--- | :--- |
 | `item_id` | Text | **Uploaded:** Unique SKU identifier. |
 | `stock_on_hand` | Integer | **Uploaded:** Physical units currently in warehouse. |
 | `location` | Text | **Uploaded:** Warehouse name. |
-| `location_region`| Text | **Uploaded:** North, Central, or South. **Must be: Miền Bắc, Miền Trung, Miền Nam** (same as dealer_master.region). |
+| `location_region`| Text | **Uploaded (Required):** North, Central, or South. **Must be: Miền Bắc, Miền Trung, Miền Nam** (same as dealer_master.region). |
 
 > **Note:** location_region should use same Vietnamese values as dealer_master.region: Miền Bắc, Miền Trung, Miền Nam.
 
@@ -218,31 +220,25 @@ See Product Master Table above for complete logic.
 See Dealer Master Table above for complete logic.
 
 ### **Region Values Standardization**
-All region fields must use exact Vietnamese values: **Miền Bắc, Miền Trung, Miền Nam**
-- Applies to: `dealer_master.region` (auto-assigned), `inventory_status.location_region` (validated)
-- Auto-assignment: Sub-region codes MN→Miền Nam, MB→Miền Bắc, MT→Miền Trung
+> For complete region value standardization and auto-assignment business logic, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md) (Business Logic Decisions section).
+- **Applies to:** `dealer_master.region` (auto-assigned), `inventory_status.location_region` (validated)
 
 ---
 
 ## Table Relationships & Validation Rules
 
 ### **Order ID Handling**
-- `sale_records.order_id`: Duplicates allowed (multiple items per order)
-- `accounts_receivable_ledger.order_id`: Duplicates allowed (multiple payment records per order)
-- `open_orders.order_id`: Must be unique (only pending orders)
-- **No cross-validation needed:** Each table serves different business purpose/state
+> For complete order ID duplication rules and business logic, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md) (Business Logic Decisions section).
 
 ### **Negative Value Handling**
-- **Returns are legitimate business transactions**
-- Negative values allowed in: `sales_volume`, `unit_price_standard`, `total_price_standard`, `sales_revenue`, `cost_of_goods`, `paid_amount`, `refund_amount`, `deduction_amount`
-- **KPI Calculations:** Include negative values (subtract from totals)
+> For complete negative values policy and business rules, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md) (Data Validation Rules section).
 - **Revenue Calculation:** Always use `date_transfer`, not `order_date`
 
 ### **Visit Log Relationships**
-- `visit_logs.plan_id`: Optional foreign key to `field_visit_plans.plan_id`
+> For plan_id foreign key constraint decision, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md) (Ambiguity Resolutions section).
+- `visit_logs.plan_id`: Optional reference to `field_visit_plans.plan_id`
 - **Planned visits:** Have matching plan_id (counted in adherence)
 - **Ad-hoc visits:** plan_id is NULL (not counted in adherence, tracked separately)
-- **No strict foreign key constraint:** Plan may be deleted but visit log retained for historical purposes
 
 ---
 

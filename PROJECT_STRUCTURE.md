@@ -69,8 +69,8 @@ DEALER REPORT/
 │   ├── 1_Upload.py                         # Data upload page (Admin/Manager only)
 │   ├── 2_Sales_Dashboard.py                # Sales & Revenue Dashboard
 │   ├── 3_Dealer_Health.py                  # Dealer Health Dashboard
-│   ├── 4_Product_Performance.py            # Product Performance Dashboard
-│   ├── 5_Inventory.py                      # Inventory Status Module
+│   ├── 4_Product_Performance.py            # Product Performance Dashboard (includes inventory status)
+│   ├── 5_Profitability_Dashboard.py        # Profitability Dashboard (Admin/Manager only)
 │   ├── 6_Field_Operations.py               # Field visit plans & logs
 │   ├── 7_Lost_Sales.py                     # Lost sales entry form
 │   └── 8_Admin.py                          # Admin panel (user management, targets)
@@ -226,8 +226,8 @@ DEALER REPORT/
 | `pages/1_Upload.py` | Data upload interface | Admin/Manager | ⏳ To Create |
 | `pages/2_Sales_Dashboard.py` | Sales & Revenue dashboard | All roles | ⏳ To Create |
 | `pages/3_Dealer_Health.py` | Dealer health monitoring | All roles | ⏳ To Create |
-| `pages/4_Product_Performance.py` | Product analytics | All roles | ⏳ To Create |
-| `pages/5_Inventory.py` | Inventory status | All roles | ⏳ To Create |
+| `pages/4_Product_Performance.py` | Product analytics + inventory status | All roles | ⏳ To Create |
+| `pages/5_Profitability_Dashboard.py` | Profitability dashboard | Admin/Manager | ⏳ To Create |
 | `pages/6_Field_Operations.py` | Visit plans & logs | All roles | ⏳ To Create |
 | `pages/7_Lost_Sales.py` | Lost sales entry | All roles | ⏳ To Create |
 | `pages/8_Admin.py` | User management | Admin only | ⏳ To Create |
@@ -298,8 +298,8 @@ DEALER REPORT/
 ### **Phase 4: Dashboards** (4 tasks)
 11. Sales Dashboard
 12. Dealer Health Dashboard
-13. Product Performance Dashboard
-14. Inventory Dashboard
+13. Product Performance Dashboard (includes inventory)
+14. Profitability Dashboard (Admin/Manager only)
 
 ### **Phase 5: Field Operations** (2 tasks)
 15. Field Operations page

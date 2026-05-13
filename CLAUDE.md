@@ -32,3 +32,7 @@ All app UI must be in Vietnamese (buttons, labels, charts, messages). For comple
 - **Start Here:** Always begin with MASTER_DECISIONS.md for implementation requirements
 - **Project Structure:** See PROJECT_STRUCTURE.md for complete file organization
 - **Implementation Plan:** Follow docs/superpowers/plans/2026-04-28-dealer-report-full-build.md
+
+## Session Behavior
+- **Skill Announcement:** Always announce which skill is being used before proceeding with format: `Using [skill name] to [purpose]`
+- This applies to all skills invoked during any session on this project

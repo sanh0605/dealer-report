@@ -241,7 +241,39 @@ docs/superpowers/plans/2026-04-28-dealer-report-full-build.md (Comprehensive imp
 
 ## 📞 Documentation Version Control
 
-### **Current Documentation Version:** 2.5 (2026-05-08)
+### **Current Documentation Version:** 3.1 (2026-05-11)
+
+**Changes in Version 3.1:**
+- ✅ **REMAINING INCONSISTENCIES RESOLVED** - Fixed 5 additional inconsistencies
+- ✅ **Chart Types:** Added "horizontal bar" to MASTER_DECISIONS.md chart types list
+- ✅ **Lost Sales Validation:** Explicitly documented that lost_volume must be positive in MASTER_DECISIONS.md
+- ✅ **Sub-Region Validation:** Added reference to MASTER_DECISIONS.md in SCHEMA.md for sales_targets validation workflow
+- ✅ **Visit Result Format:** Standardized visit result format between MASTER_DECISIONS.md and DASHBOARDS.md
+- ✅ **REDAUNDANCIES REDUCED** - Replaced duplicate content with references to MASTER_DECISIONS.md
+- ✅ **Negative Values:** Replaced SCHEMA.md "Negative Value Handling" section with reference to MASTER_DECISIONS.md
+- ✅ **Order ID:** Replaced SCHEMA.md "Order ID Handling" section with reference to MASTER_DECISIONS.md
+- ✅ **Region Assignment:** Replaced duplicate region auto-assignment logic with reference to MASTER_DECISIONS.md
+- ✅ **AMBIGUITIES RESOLVED** - Documented 9 explicit implementation decisions in MASTER_DECISIONS.md
+- ✅ **Foreign Key Constraint:** Documented plan_id as application-level only (no DB constraint)
+- ✅ **Session Storage:** Documented Streamlit session state for LAN deployment
+- ✅ **Lost Sales Calculation:** Documented real-time calculation at time of entry
+- ✅ **Chart Export:** Documented conversion to static PNG images for PDF
+- ✅ **Audit Log Retention:** Documented automated cleanup on app startup
+- ✅ **Concurrent Access:** Documented SQLite approach for ~10 users
+- ✅ **TDD Scope:** Documented TDD for services only, manual UI testing
+- ✅ **Character Encoding:** Documented UTF-8 for Vietnamese characters
+- ✅ **Error Handling:** Documented Karpathy Guidelines approach
+- ✅ **MASTER_DECISIONS.md:** Updated to version 3.2 with "Ambiguity Resolutions" section
+
+**Changes in Version 3.0:**
+- ✅ **CRITICAL DOCUMENTATION RESOLUTIONS** - Fixed 5 critical inconsistencies identified in workspace audit
+- ✅ **Table Count:** Confirmed 13 tables (11 business + 2 system) - updated implementation plan test to include audit_logs
+- ✅ **Dashboard Structure:** Renamed 5_Inventory.py to 5_Profitability_Dashboard.py, inventory integrated into Product Performance Dashboard
+- ✅ **Role Naming:** Standardized to "Sales Staff" (replaced "Employee") across all documentation
+- ✅ **Location Region:** Marked inventory_status.location_region as required (was inconsistent)
+- ✅ **Page Numbering:** Assigned proper page number (5) to Profitability Dashboard
+- ✅ **MASTER_DECISIONS.md:** Updated to version 3.1 with "Critical Documentation Resolutions" section documenting all fixes
+- ✅ **Implementation Plan:** Updated all references to match corrected structure
 
 **Changes in Version 2.5:**
 - ✅ Added YEAR_TARGET_REPORT.md - comprehensive Year Target Observation Report specification

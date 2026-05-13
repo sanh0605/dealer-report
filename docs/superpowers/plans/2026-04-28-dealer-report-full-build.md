@@ -4,7 +4,7 @@
 
 **Goal:** Build a production-ready Streamlit wholesale operations platform covering sales analytics, dealer health, inventory, field visits, and data exports — accessible to staff on the company LAN.
 
-**Architecture:** Multi-page Streamlit app with a local SQLite database (SQLAlchemy ORM), role-based access control (Admin / Manager / Employee), CSV/Excel data upload, Plotly dashboards, and WeasyPrint/python-pptx export. All business logic lives in pure-function services tested with pytest before any UI is written.
+**Architecture:** Multi-page Streamlit app with a local SQLite database (SQLAlchemy ORM), role-based access control (Admin / Manager / Sales Staff), CSV/Excel data upload, Plotly dashboards, and WeasyPrint/python-pptx export. All business logic lives in pure-function services tested with pytest before any UI is written.
 
 **Tech Stack:** Python 3.11+, Streamlit, SQLAlchemy 2.x, SQLite, Pandas, Plotly, python-pptx, WeasyPrint, pytest, Playwright (E2E)
 
@@ -19,7 +19,7 @@
 - [x] Create `.env` file with content: `DATABASE_URL=sqlite:///./dealer_report.db` and `SECRET_KEY=change-me-in-production`
 - [x] Create SECURITY.md with complete password policy, session management, user roles, and audit trail requirements
 - [x] Create DASHBOARDS.md with complete dashboard design specifications (5 dashboards with Vietnamese UI)
-- [x] Create DATA_VALIDATION.md with validation rules for all 11 tables including decision workflow for sales_targets
+- [x] Create DATA_VALIDATION.md with validation rules for all 13 tables (11 business + 2 system) including decision workflow for sales_targets
 - [x] Add `dealer_VX_id` field to dealer_master table (optional text field)
 - [x] Update business logic for lost sales revenue calculation with cascading formula
 - [x] Define visit adherence with structured outcomes + free notes
@@ -38,7 +38,7 @@
 | `.env` | DB URL and secret key |
 | `database/models.py` | All 11 SQLAlchemy ORM models |
 | `database/session.py` | Engine creation, `get_db()` session factory |
-| `database/seed.py` | Create tables + seed Admin/Manager/Employee users |
+| `database/seed.py` | Create tables + seed Admin/Manager/Sales Staff users |
 | `auth/service.py` | `login()`, `get_session_user()`, `require_role()` |
 | `services/upload_service.py` | `load_file()`, `validate_columns()`, `upsert_table()` |
 | `services/analytics.py` | All KPI calculations (pure functions, no Streamlit) |
@@ -49,8 +49,8 @@
 | `pages/1_Upload.py` | Admin upload page for all tables |
 | `pages/2_Sales_Dashboard.py` | Revenue KPIs + bar/pie/line charts |
 | `pages/3_Dealer_Health.py` | AR aging, outstanding balance, dealer ranking |
-| `pages/4_Product_Performance.py` | Sales by brand/category/model |
-| `pages/5_Inventory.py` | Stock status, incoming, open orders, net availability |
+| `pages/4_Product_Performance.py` | Sales by brand/category/model + inventory status tracking |
+| `pages/5_Profitability_Dashboard.py` | Profit & margin analysis (Admin/Manager only) |
 | `pages/6_Field_Operations.py` | Visit plan management + log entry + adherence metrics |
 | `pages/7_Lost_Sales.py` | Lost sales entry form + summary table |
 | `pages/8_Admin.py` | User management + sales targets upload |
@@ -105,7 +105,7 @@ SECRET_KEY=change-me-in-production
 - [ ] **Step 3: Create `config.py`**
 
 ```python
-ROLES = ["Admin", "Manager", "Employee"]
+ROLES = ["Admin", "Manager", "Sales Staff"]
 
 BRAND_GROUP_MAP: dict[str, str] = {
     # Populate with actual brand names before first upload
@@ -189,7 +189,7 @@ def test_all_tables_created(engine):
         "sale_records", "accounts_receivable_ledger", "product_master",
         "dealer_master", "sales_targets", "inventory_status",
         "incoming_shipments", "open_orders", "lost_sales_entry",
-        "field_visit_plans", "visit_logs", "users",
+        "field_visit_plans", "visit_logs", "users", "audit_logs",
     ]
     for t in expected:
         assert t in tables, f"Missing table: {t}"
@@ -351,7 +351,7 @@ Expected: 3 PASSED
 
 ```bash
 git add database/models.py tests/test_models.py
-git commit -m "feat: SQLAlchemy ORM models for all 11 tables + users"
+git commit -m "feat: SQLAlchemy ORM models for all 13 tables (11 business + 2 system)"
 ```
 
 ---
@@ -427,7 +427,7 @@ def test_seed_creates_three_users(engine):
     users = db.query(User).all()
     assert len(users) == 3
     roles = {u.role for u in users}
-    assert roles == {"Admin", "Manager", "Employee"}
+    assert roles == {"Admin", "Manager", "Sales Staff"}
     db.close()
 
 def test_seed_passwords_are_hashed(engine):
@@ -458,9 +458,9 @@ from database.models import User
 from database.session import init_db, get_db
 
 _SEED_USERS = [
-    {"username": "admin",    "password": "admin123",    "role": "Admin",    "display_name": "Administrator"},
-    {"username": "manager",  "password": "manager123",  "role": "Manager",  "display_name": "Sales Manager"},
-    {"username": "employee", "password": "employee123", "role": "Employee", "display_name": "Sales Staff"},
+    {"username": "admin",    "password": "admin123",    "role": "Admin",       "display_name": "Administrator"},
+    {"username": "manager",  "password": "manager123",  "role": "Manager",     "display_name": "Sales Manager"},
+    {"username": "employee", "password": "employee123", "role": "Sales Staff", "display_name": "Sales Staff"},
 ]
 
 def _hash(password: str) -> str:
@@ -484,9 +484,9 @@ if __name__ == "__main__":
     try:
         seed_users(db)
         print("Database initialized. Default users created.")
-        print("  admin / admin123  (Admin)")
-        print("  manager / manager123  (Manager)")
-        print("  employee / employee123  (Employee)")
+        print("  admin / admin123     (Admin)")
+        print("  manager / manager123 (Manager)")
+        print("  employee / employee123 (Sales Staff)")
         print("IMPORTANT: Change all passwords after first login.")
     finally:
         db.close()
@@ -512,7 +512,7 @@ Expected: Confirmation message with 3 users printed.
 
 ```bash
 git add database/seed.py tests/test_models.py
-git commit -m "feat: seed script creates default Admin/Manager/Employee users"
+git commit -m "feat: seed script creates default Admin/Manager/Sales Staff users"
 ```
 
 ---
@@ -1370,87 +1370,50 @@ git commit -m "feat: product performance page with brand/category/SKU views"
 
 ---
 
-### Task 14: Inventory Module
+### Task 14: Profitability Dashboard (Admin/Manager Only)
 
 **Files:**
-- Create: `pages/5_Inventory.py`
+- Create: `pages/5_Profitability_Dashboard.py`
 
-- [ ] **Step 1: Create `pages/5_Inventory.py`**
+- [ ] **Step 1: Create `pages/5_Profitability_Dashboard.py`**
 
 ```python
 import streamlit as st
-import pandas as pd
-from database.session import get_db
-from database.models import InventoryStatus, IncomingShipment, OpenOrder, ProductMaster
+from auth.service import require_role, get_session_user
+from services.analytics import calc_gross_profit, calc_profit_by_category
+from components.charts import pie_chart, line_chart, stacked_bar_chart
 
-st.set_page_config(page_title="Inventory", layout="wide")
-if "user" not in st.session_state:
-    st.error("Please sign in from the Home page.")
-    st.stop()
+# Role-based access control
+require_role(["Admin", "Manager"])
 
-st.title("🏭 Inventory Status")
+st.set_page_config(page_title="Profitability Dashboard", layout="wide")
+st.title("💹 Hiệu quả Kinh doanh (Profitability)")
 
 db = get_db()
-try:
-    inv_rows  = db.query(InventoryStatus).all()
-    ship_rows = db.query(IncomingShipment).all()
-    oo_rows   = db.query(OpenOrder).all()
-    prod_rows = db.query(ProductMaster).all()
-finally:
-    db.close()
+user = get_session_user()
 
-if not inv_rows:
-    st.info("No inventory data found. Upload inventory_status data first.")
-    st.stop()
+# Get profitability KPIs
+gross_profit = calc_gross_profit(db)
+category_profit = calc_profit_by_category(db)
 
-inv_df  = pd.DataFrame([r.__dict__ for r in inv_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-ship_df = pd.DataFrame([r.__dict__ for r in ship_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-oo_df   = pd.DataFrame([r.__dict__ for r in oo_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-prod_df = pd.DataFrame([r.__dict__ for r in prod_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
+# KPI Cards
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Biên lợi nhuận gộp", f"{gross_profit['margin_pct']:.1f}%")
+col2.metric("Lợi nhuận ròng", f"{gross_profit['net_profit']:,.0f} VND")
+col3.metric("Tăng trưởng lợi nhuận", f"{gross_profit['growth_pct']:+.1f}%")
+col4.metric("Hiệu quả chi phí", f"{gross_profit['cost_efficiency']:.1f}%")
 
-inv_df["stock_on_hand"] = pd.to_numeric(inv_df["stock_on_hand"], errors="coerce").fillna(0)
+# Charts
+chart_col1, chart_col2 = st.columns(2)
 
-# Aggregate by item_id (sum across warehouses)
-stock = inv_df.groupby("item_id")["stock_on_hand"].sum().reset_index()
+with chart_col1:
+    st.plotly_chart(stacked_bar_chart(category_profit, x="category", y="profit", color="category"), use_container_width=True)
 
-if not ship_df.empty:
-    ship_df["incoming_qty"] = pd.to_numeric(ship_df["incoming_qty"], errors="coerce").fillna(0)
-    incoming = ship_df.groupby("item_id")["incoming_qty"].sum().reset_index()
-    stock = stock.merge(incoming, on="item_id", how="left").fillna(0)
-else:
-    stock["incoming_qty"] = 0
+with chart_col2:
+    st.plotly_chart(pie_chart(category_profit, names="category", values="profit"), use_container_width=True)
 
-if not oo_df.empty:
-    oo_df["open_qty"] = pd.to_numeric(oo_df["open_qty"], errors="coerce").fillna(0)
-    open_q = oo_df.groupby("item_id")["open_qty"].sum().reset_index()
-    stock = stock.merge(open_q, on="item_id", how="left").fillna(0)
-else:
-    stock["open_qty"] = 0
-
-stock["net_available"] = stock["stock_on_hand"] + stock["incoming_qty"] - stock["open_qty"]
-
-LOW_STOCK_THRESHOLD = st.sidebar.number_input("Low stock threshold (units)", min_value=0, value=10)
-
-def _status(row):
-    if row["stock_on_hand"] == 0:
-        return "Stockout"
-    if row["stock_on_hand"] <= LOW_STOCK_THRESHOLD:
-        return "Low Stock"
-    return "Healthy"
-
-stock["status"] = stock.apply(_status, axis=1)
-
-if not prod_df.empty:
-    stock = stock.merge(prod_df[["item_id","item_name","brand","category"]], on="item_id", how="left")
-
-col1, col2, col3 = st.columns(3)
-col1.metric("Stockout SKUs", int((stock["status"] == "Stockout").sum()))
-col2.metric("Low Stock SKUs", int((stock["status"] == "Low Stock").sum()))
-col3.metric("Healthy SKUs", int((stock["status"] == "Healthy").sum()))
-
-status_filter = st.selectbox("Filter by status", ["All", "Stockout", "Low Stock", "Healthy"])
-display = stock if status_filter == "All" else stock[stock["status"] == status_filter]
-st.dataframe(display.reset_index(drop=True), use_container_width=True)
+# Profitability Table
+st.dataframe(category_profit, use_container_width=True)
 ```
 
 - [ ] **Step 2: Test in browser.**
@@ -1458,8 +1421,8 @@ st.dataframe(display.reset_index(drop=True), use_container_width=True)
 - [ ] **Step 3: Commit**
 
 ```bash
-git add pages/5_Inventory.py
-git commit -m "feat: inventory page with stock/incoming/open-order net availability"
+git add pages/5_Profitability_Dashboard.py
+git commit -m "feat: profitability dashboard (Admin/Manager only)"
 ```
 
 ---
@@ -2047,8 +2010,8 @@ git commit -m "chore: Streamlit LAN server config and final deployment setup"
 | CSV/Excel upload with validation | Task 7, 8 |
 | Sales & Revenue dashboard (KPIs, bar, pie, line) | Task 11 |
 | Dealer health / AR outstanding | Task 12 |
-| Product performance by brand/category/SKU | Task 13 |
-| Inventory: stock, incoming, open orders, net avail | Task 14 |
+| Product performance by brand/category/SKU + inventory status | Task 13 |
+| Profitability dashboard (Admin/Manager only) | Task 14 |
 | Field visit plans + adherence metrics | Task 15 |
 | Lost sales entry form + auto revenue calc | Task 16 |
 | PDF export | Task 17 |
@@ -2056,7 +2019,7 @@ git commit -m "chore: Streamlit LAN server config and final deployment setup"
 | Admin: user management + password change | Task 19 |
 | Admin: sales targets upload | Task 19 |
 | LAN deployment for staff | Task 20 |
-| All 11 DB tables + users table | Task 2 |
+| All 13 DB tables (11 business + 2 system) | Task 2 |
 | Seed script (python -m database.seed) | Task 4 |
 | brand_group auto-assignment | Task 7 (upload service) |
 | region auto-assignment from sub_region | Task 7 (upload service) |

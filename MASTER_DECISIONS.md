@@ -1,9 +1,9 @@
 # MASTER_DECISIONS.md - All Business & Technical Decisions
 
-**Last Updated:** 2026-05-08  
-**Purpose:** Single source of truth for all business logic, rules, policies, and implementation decisions  
+**Last Updated:** 2026-05-11
+**Purpose:** Single source of truth for all business logic, rules, policies, and implementation decisions
 **Status:** ⭐ AUTHORITATIVE - All other documentation references this document
-**Version:** 3.0 - Comprehensive conflict resolution
+**Version:** 3.2 - Complete documentation audit resolution (inconsistencies, redundancies, ambiguities)
 
 > **IMPORTANT:** This is the SINGLE SOURCE OF TRUTH for the entire project.
 > - All business rules are defined here
@@ -61,6 +61,7 @@ This document summarizes all critical decisions made during requirements gatheri
   - Volume KPIs: Include negative `sales_volume` values (sales - returns)
   - Profit KPIs: Include negative `cost_of_goods` values (proper return cost handling)
   - No exclusion of negative values from any business metrics
+- **Exception:** `lost_sales_entry.lost_volume` must be positive (cannot have negative lost sales - lost sales represent missed opportunities, not returns)
 
 ### **Date Format Recognition**
 - **Auto-Detection:** System recognizes multiple date formats automatically:
@@ -89,11 +90,15 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 
 ### **Visit Adherence Definition**
 1. **Structured Outcomes Required:** Staff must select from:
-   - Thành công (Success), Cần theo dõi (Follow-up), Vấn đề tồn kho (Stock Issue), Thanh toán (Payment), Khác (Other)
+   - **Thành công (Success):** Sale made, relationship maintained
+   - **Cần theo dõi (Follow-up):** Potential sale, needs follow-up
+   - **Vấn đề tồn kho (Stock Issue):** Dealer needs inventory
+   - **Thanh toán (Payment):** Payment collection discussion
+   - **Khác (Other):** Other business discussed
 2. **Free Notes Required:** Text field for additional context
 3. **Completed Visit Definition:** Both structured outcome AND free notes required
 4. **Ad-hoc Visits Allowed:** System permits visits to dealers not in monthly plan (marked as opportunistic visits)
-5. **Visit Log Relationships:** 
+5. **Visit Log Relationships:**
    - `visit_logs.plan_id` is optional (NULL for ad-hoc visits)
    - **Planned visits:** Have matching `plan_id` (counted in adherence)
    - **Ad-hoc visits:** `plan_id` is NULL (not counted in adherence, tracked separately)
@@ -188,7 +193,9 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 - Lost Sales Page (pages/7_Lost_Sales.py) - Lost sales entry form (All roles)
 - Admin Page (pages/8_Admin.py) - User management and settings (Admin only)
 
-**Page Numbering:** 1_Upload.py, 2_Sales_Dashboard.py, 3_Dealer_Health.py, 4_Product_Performance.py, 5_Inventory.py, 6_Field_Operations.py, 7_Lost_Sales.py, 8_Admin.py
+**Page Numbering:** 1_Upload.py, 2_Sales_Dashboard.py, 3_Dealer_Health.py, 4_Product_Performance.py, 5_Profitability_Dashboard.py, 6_Field_Operations.py, 7_Lost_Sales.py, 8_Admin.py
+
+**Note:** Inventory status and stock tracking are integrated into the Product Performance Dashboard (pages/4_Product_Performance.py). There is no separate Inventory dashboard page.
 
 ---
 
@@ -286,7 +293,7 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 - **Exports:** python-pptx (PPT), WeasyPrint (PDF)
 - **Testing:** pytest (unit tests), Playwright (E2E tests)
 - **Security:** bcrypt (password hashing), python-dotenv (configuration)
-- **Chart Types Supported:** Plotly supports all chart types specified in DASHBOARDS.md (bar, pie, line, donut, stacked bar, scatter, histogram, bubble, treemap, area, heatmap)
+- **Chart Types Supported:** Plotly supports all chart types specified in DASHBOARDS.md (bar, horizontal bar, pie, line, donut, stacked bar, scatter, histogram, bubble, treemap, area, heatmap)
 
 ### **Database Configuration**
 - **Environment:** Single database for LAN deployment (~10 staff)
@@ -398,6 +405,120 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 
 ---
 
+## Critical Documentation Resolutions (2026-05-11)
+
+This section documents the resolution of critical inconsistencies identified during workspace audit. All decisions below are authoritative and must be followed during implementation.
+
+### **1. Table Count - Authoritative Decision**
+- **Total Tables:** 13 tables (11 business tables + 2 system tables)
+- **System Tables:** users (authentication), audit_logs (security audit trail)
+- **Business Tables:** sale_records, accounts_receivable_ledger, product_master, dealer_master, sales_targets, inventory_status, incoming_shipments, open_orders, lost_sales_entry, field_visit_plans, visit_logs
+- **Resolution:** All documentation updated to consistently reference 13 tables. Implementation plan test updated to include audit_logs.
+
+### **2. Dashboard Structure - Authoritative Decision**
+- **5 Data Dashboards:**
+  1. Sales & Revenue Dashboard (pages/2_Sales_Dashboard.py)
+  2. Dealer Health Dashboard (pages/3_Dealer_Health.py)
+  3. Product Performance Dashboard (pages/4_Product_Performance.py) - includes inventory status tracking
+  4. Field Operations Dashboard (pages/6_Field_Operations.py)
+  5. Profitability Dashboard (pages/5_Profitability_Dashboard.py) - Admin/Manager only
+- **3 Utility Pages:**
+  - Upload Page (pages/1_Upload.py) - Admin/Manager only
+  - Lost Sales Page (pages/7_Lost_Sales.py) - All roles
+  - Admin Page (pages/8_Admin.py) - Admin only
+- **Resolution:** Renamed pages/5_Inventory.py to pages/5_Profitability_Dashboard.py. Inventory functionality integrated into Product Performance Dashboard.
+
+### **3. Role Naming - Authoritative Decision**
+- **Standard Role Names:** Admin, Manager, Sales Staff
+- **Role Display Names:** Administrator, Sales Manager, Sales Staff
+- **Resolution:** All documentation updated to use "Sales Staff" instead of "Employee". Implementation plan updated with corrected role names.
+
+### **4. Location Region Requirement - Authoritative Decision**
+- **Field:** inventory_status.location_region
+- **Requirement:** Required field
+- **Valid Values:** Miền Bắc, Miền Trung, Miền Nam
+- **Business Justification:** Required for consistency with dealer_master.region (which is auto-assigned) and for proper region-based inventory filtering
+- **Resolution:** DATA_VALIDATION.md updated to mark location_region as required (✅ Yes) instead of optional (❌ Optional).
+
+### **5. Page Numbering - Authoritative Decision**
+- **Complete Page Structure:**
+  - pages/1_Upload.py (Admin/Manager)
+  - pages/2_Sales_Dashboard.py (All roles)
+  - pages/3_Dealer_Health.py (All roles)
+  - pages/4_Product_Performance.py (All roles)
+  - pages/5_Profitability_Dashboard.py (Admin/Manager)
+  - pages/6_Field_Operations.py (All roles)
+  - pages/7_Lost_Sales.py (All roles)
+  - pages/8_Admin.py (Admin only)
+- **Resolution:** Profitability Dashboard now has proper page number (5) and all documentation reflects this structure.
+
+### **6. Ambiguity Resolutions (Implementation Decisions)**
+
+This section documents explicit decisions for previously ambiguous implementation details.
+
+#### **plan_id Foreign Key Constraint**
+- **Decision:** Application-level only, NO database-level foreign key constraint
+- **Business Justification:** Plans may be deleted but visit logs must be retained for historical purposes
+- **Implementation:** Use soft validation (check existence on read, optional constraint on write)
+- **Files Affected:** database/models.py (visit_logs table)
+
+#### **Session Storage Mechanism**
+- **Decision:** Streamlit built-in session state (st.session_state) for LAN deployment
+- **Business Justification:** Simple deployment, no external session store required for ~10 users
+- **Remember Me Feature:** Use Streamlit session with 30-day expiration (if available) or browser cookies
+- **Implementation:** Store user object in st.session_state["user"], check on page load
+- **Files Affected:** auth/service.py, app.py
+
+#### **Lost Sales Revenue Calculation Timing**
+- **Decision:** Calculate at time of lost sales entry (real-time)
+- **Business Justification:** Most accurate revenue representation at time of missed opportunity
+- **Formula:** `lost_revenue = lost_volume × avg_revenue_per_unit` (3-month dealer/item average)
+- **Fallback:** If no dealer history, use all-dealer average for that item
+- **Implementation:** Calculate in analytics.py, store in database
+- **Files Affected:** services/analytics.py, database/models.py (lost_sales_entry table)
+
+#### **Chart Export Format for PDF**
+- **Decision:** Convert Plotly charts to static images (PNG) before PDF generation
+- **Business Justification:** WeasyPrint doesn't support interactive charts; images are printable
+- **Implementation:** Use Plotly's `to_image()` method to convert charts to base64 PNG
+- **Resolution:** 1920x1080 pixels for high-quality print
+- **Files Affected:** services/export_pdf.py
+
+#### **Audit Log Retention Mechanism**
+- **Decision:** Automated cleanup on application startup (not cron job)
+- **Business Justification:** Simpler deployment for LAN environment, no external scheduler needed
+- **Implementation:** Add cleanup function to database/seed.py, call on app startup
+- **Retention:** Delete records older than 90 days from audit_logs table
+- **Files Affected:** database/seed.py, app.py
+
+#### **Concurrent User Access for SQLite**
+- **Decision:** No special handling required for ~10 staff LAN deployment
+- **Business Justification:** SQLite handles read concurrency well; write conflicts rare for this use case
+- **Implementation:** Use SQLAlchemy session management with automatic retry on write conflicts
+- **Performance:** Connection pooling with timeout of 30 seconds
+- **Files Affected:** database/session.py
+
+#### **TDD Scope for UI Components**
+- **Decision:** TDD applies to business logic services, NOT to Streamlit page UI
+- **Business Justification:** UI changes frequently; testing business logic provides more value
+- **Implementation:** Write tests for services/ (analytics, upload_service, export), manual testing for pages/
+- **E2E Testing:** Use Playwright for end-to-end UI testing
+- **Files Affected:** tests/ directory structure
+
+#### **Vietnamese Character Encoding**
+- **Decision:** UTF-8 encoding for all database storage and file operations
+- **Business Justification:** Industry standard, supports all Vietnamese characters
+- **Implementation:** SQLAlchemy uses UTF-8 by default, no explicit configuration needed
+- **Files Affected:** database/models.py, database/session.py
+
+#### **Error Handling Approach**
+- **Decision:** Follow Karpathy Guidelines - minimal error handling for impossible scenarios
+- **Business Justification:** Avoids code bloat; focuses on actual failure cases
+- **Implementation:** Validate at system boundaries (user input, database, external APIs)
+- **Files Affected:** All service modules
+
+---
+
 ## Next Steps
 
 ### **Before Coding Begins**
@@ -408,6 +529,9 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 ✅ All dashboard designs completed
 ✅ All export formats specified
 ✅ All language policies established
+✅ **Documentation audit complete:** All inconsistencies, redundancies, and ambiguities resolved (Version 3.2)
+✅ **Single source of truth established:** All rules documented in MASTER_DECISIONS.md
+✅ **Implementation decisions documented:** 9 ambiguity resolutions for development guidance
 
 ### **Coding Phase**
 ⏳ Implement authentication system
