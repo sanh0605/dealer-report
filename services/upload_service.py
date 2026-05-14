@@ -1,7 +1,9 @@
 import io
 import pandas as pd
+from datetime import datetime, date
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.types import Date, DateTime
 from config import REQUIRED_COLUMNS, BRAND_GROUP_MAP, SUB_REGION_TO_REGION
 from database.models import (
     SaleRecord, AccountsReceivableLedger, ProductMaster, DealerMaster,
@@ -34,6 +36,19 @@ def validate_columns(df: pd.DataFrame, table_name: str) -> list[str]:
     return [c for c in required if c not in df.columns]
 
 
+def _convert_date_columns(df: pd.DataFrame, model) -> pd.DataFrame:
+    df = df.copy()
+    for col in df.columns:
+        if col not in model.__mapper__.columns:
+            continue
+        col_type = model.__mapper__.columns[col].type
+        if isinstance(col_type, (Date, DateTime)):
+            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+            if isinstance(col_type, Date):
+                df[col] = df[col].dt.date
+    return df
+
+
 def _apply_auto_assignments(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
     df = df.copy()
     if table_name == "product_master" and "brand" in df.columns:
@@ -46,6 +61,7 @@ def _apply_auto_assignments(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
 def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
     model = _TABLE_MODEL_MAP[table_name]
     df = _apply_auto_assignments(df, table_name)
+    df = _convert_date_columns(df, model)
     mapper = model.__mapper__
     cols = {c.key for c in mapper.columns}
     df = df[[c for c in df.columns if c in cols]]
