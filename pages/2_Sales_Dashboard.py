@@ -3,6 +3,7 @@ import pandas as pd
 from database.session import get_db
 from database.models import SaleRecord, DealerMaster, ProductMaster, SalesTarget
 from services.analytics import calc_total_revenue, calc_gross_profit, calc_target_completion
+from services.export_pdf import generate_pdf_bytes, build_dashboard_html
 from components.kpi_cards import render_kpi_row
 from components.charts import bar_chart, pie_chart, line_chart
 
@@ -160,6 +161,21 @@ render_kpi_row([
     {"label": "Ty le cong no", "value": f"{ar_ratio:.1f}%", "delta": ar_delta},
     {"label": "Gia tri don hang TB", "value": f"{avg_order_value:,.0f} VND"},
 ])
+
+# Export PDF button
+if st.button("📄 Xuat PDF"):
+    html = build_dashboard_html(
+        kpis={
+            "Doanh thu tong": f"{total_rev:,.0f} VND",
+            "Tong so luong": f"{total_vol:,} don vi",
+            "Toc do tang truong": f"{growth_rate:.1f}%",
+            "Ty le cong no": f"{ar_ratio:.1f}%",
+            "Gia tri don hang TB": f"{avg_order_value:,.0f} VND",
+        },
+        tables=[]
+    )
+    pdf_bytes = generate_pdf_bytes(html)
+    st.download_button("Tai PDF", data=pdf_bytes, file_name="bao_cao_dealer_report.pdf", mime="application/pdf")
 
 st.divider()
 
