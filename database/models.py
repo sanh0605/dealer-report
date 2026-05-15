@@ -11,10 +11,10 @@ def _uuid() -> str:
 class SaleRecord(Base):
     __tablename__ = "sale_records"
     order_id              = Column(Text, primary_key=True)
+    item_id               = Column(Text, primary_key=True)
     order_date            = Column(DateTime)
     date_transfer         = Column(Date)
     dealer_id             = Column(Text, index=True)
-    item_id               = Column(Text, index=True)
     salesperson           = Column(Text)
     sale_admin            = Column(Text)
     channel_name          = Column(Text)
@@ -28,6 +28,8 @@ class AccountsReceivableLedger(Base):
     __tablename__ = "accounts_receivable_ledger"
     id                = Column(Text, primary_key=True, default=_uuid)
     order_id          = Column(Text, index=True)
+    order_date        = Column(Date)
+    dealer_id         = Column(Text, index=True)
     date_posted       = Column(Date)
     due_date          = Column(Date)
     total_order_value = Column(Float)
@@ -68,8 +70,7 @@ class SalesTarget(Base):
 
 class InventoryStatus(Base):
     __tablename__ = "inventory_status"
-    id              = Column(Text, primary_key=True, default=_uuid)
-    item_id         = Column(Text, index=True)
+    item_id         = Column(Text, primary_key=True)
     stock_on_hand   = Column(Integer)
     location        = Column(Text)
     location_region = Column(Text)
@@ -83,8 +84,7 @@ class IncomingShipment(Base):
 
 class OpenOrder(Base):
     __tablename__ = "open_orders"
-    id        = Column(Text, primary_key=True, default=_uuid)
-    order_id  = Column(Text)
+    order_id  = Column(Text, primary_key=True)
     dealer_id = Column(Text, index=True)
     item_id   = Column(Text, index=True)
     open_qty  = Column(Integer)

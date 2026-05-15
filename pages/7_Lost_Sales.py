@@ -1,3 +1,5 @@
+from components.ui_utils import show_centered_loader
+PageLoader = show_centered_loader()
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
@@ -102,3 +104,6 @@ with tab_summary:
         st.metric("Tổng Doanh thu bị mất", f"฿{ls_df['lost_revenue'].sum():,.0f}")
         st.metric("Tổng Số lượng bị mất", f"{int(ls_df['lost_volume'].sum()):,} đơn vị")
         st.dataframe(ls_df.sort_values("date", ascending=False).reset_index(drop=True), use_container_width=True)
+
+PageLoader.empty()
+

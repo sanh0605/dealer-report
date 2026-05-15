@@ -1,3 +1,5 @@
+from components.ui_utils import show_centered_loader
+PageLoader = show_centered_loader()
 import streamlit as st
 import pandas as pd
 from database.session import get_db
@@ -51,3 +53,6 @@ with tab2:
 with tab3:
     top_skus = merged.groupby("item_id")[["sales_revenue","sales_volume"]].sum().reset_index().sort_values("sales_revenue", ascending=False).head(20)
     st.dataframe(top_skus, use_container_width=True)
+
+PageLoader.empty()
+

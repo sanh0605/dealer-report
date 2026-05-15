@@ -47,6 +47,7 @@
 | Field | Validation Rules | Required? |
 |-------|-----------------|-----------|
 | `order_id` | Text, not empty, duplicates allowed | ✅ Yes |
+| `order_date` | Valid date format (auto-recognize), required | ✅ Yes |
 | `date_posted` | Valid date format (auto-recognize), required | ✅ Yes |
 | `due_date` | Valid date format (auto-recognize), required | ✅ Yes |
 | `total_order_value` | Decimal number (can be positive/negative) | ✅ Yes |

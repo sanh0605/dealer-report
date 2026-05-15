@@ -1,3 +1,5 @@
+from components.ui_utils import show_centered_loader
+PageLoader = show_centered_loader()
 import streamlit as st
 import pandas as pd
 from database.session import get_db
@@ -69,3 +71,6 @@ if "category" in merged.columns:
         display_df = by_cat[["category","revenue","cost","profit","margin_pct"]].copy()
         display_df.columns = ["Danh mục","Doanh thu","Chi phí","Lợi nhuận","Biên lợi nhuận (%)"]
         st.dataframe(display_df, use_container_width=True)
+
+PageLoader.empty()
+

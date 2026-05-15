@@ -6,6 +6,10 @@ import streamlit as st
 from auth.service import require_role
 from database.session import get_db
 from services.upload_service import load_file, validate_columns, upsert_dataframe
+from components.ui_utils import show_centered_loader
+
+# Show loading animation
+PageLoader = PageLoader = show_centered_loader()
 
 st.set_page_config(page_title="Upload Data", layout="wide")
 
@@ -52,3 +56,17 @@ if uploaded:
                 st.error(f"Upload failed: {e}")
             finally:
                 db.close()
+
+# Dismiss loader
+st.markdown(
+    """
+    <script>
+    const loader = window.parent.document.getElementById('centered-loader');
+    if (loader) { loader.style.display = 'none'; }
+    </script>
+    """,
+    unsafe_allow_html=True
+)
+
+
+PageLoader.empty()

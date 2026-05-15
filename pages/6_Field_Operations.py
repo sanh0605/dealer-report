@@ -1,3 +1,5 @@
+from components.ui_utils import show_centered_loader
+PageLoader = show_centered_loader()
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -90,3 +92,6 @@ with tab_log:
                 st.success("Đã lưu ghi nhận thăm thành công.")
             finally:
                 db.close()
+
+PageLoader.empty()
+

@@ -4,6 +4,11 @@ Configuration constants and mappings for Dealer Report System.
 
 ROLES = ["Admin", "Manager", "Sales Staff"]
 
+# AR Aging Configuration
+AR_BUCKET_SIZE = 30  # days per bucket
+AR_MAX_DAYS = 180     # maximum days to display
+
+
 BRAND_GROUP_MAP: dict[str, str] = {
     # Populate with actual brand names before first upload
     # Example: "Trek": "Premium Bikes", "Shimano": "Components"
@@ -19,7 +24,7 @@ REQUIRED_COLUMNS: dict[str, list[str]] = {
                      "salesperson","sale_admin","channel_name","sales_volume",
                      "unit_price_standard","total_price_standard","sales_revenue",
                      "cost_of_goods"],
-    "accounts_receivable_ledger": ["order_id","date_posted","due_date",
+    "accounts_receivable_ledger": ["order_id","order_date","dealer_id","date_posted","due_date",
                                     "total_order_value","refund_amount",
                                     "deduction_amount","paid_amount"],
     "product_master": ["item_id","item_name","product_id","product","brand",

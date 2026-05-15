@@ -27,6 +27,7 @@ Thumbs.db
 
 # Database
 *.db
+!dealer_report.db
 *.sqlite
 *.sqlite3
 

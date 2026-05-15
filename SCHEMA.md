@@ -36,6 +36,7 @@
 | Column | Type | Description |
 | :--- | :--- | :--- |
 | `order_id` | Text | Links to sale_records for identity and shipping date. **Duplicates allowed** (multiple payment records per order). |
+| `order_date` | Date | The date the dealer placed the order. |
 | `date_posted` | Date | The date the payment/refund action was recorded. |
 | `due_date` | Date | The date payment is expected for this specific order. |
 | `total_order_value` | Float | Base value (System uses MAX per order_id to avoid duplication). |

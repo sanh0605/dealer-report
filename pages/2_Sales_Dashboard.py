@@ -3,272 +3,441 @@ import pandas as pd
 from database.session import get_db
 from database.models import SaleRecord, DealerMaster, ProductMaster, SalesTarget
 from services.analytics import calc_total_revenue, calc_gross_profit, calc_target_completion
-from services.export_pdf import generate_pdf_bytes, build_dashboard_html
+from services.export_ppt import generate_ppt_bytes
 from components.kpi_cards import render_kpi_row
-from components.charts import bar_chart, pie_chart, line_chart
+from components.charts import bar_chart, pie_chart, line_chart, horizontal_bar_chart, stacked_bar_chart
+from components.ui_utils import show_centered_loader
 
-st.set_page_config(page_title="Sales & Revenue Dashboard", layout="wide")
+# Display centered loading animation during initial render
+PageLoader = show_centered_loader()
+
+try:
+    from services.export_pdf import generate_pdf_bytes, build_dashboard_html
+    PdfExportAvailable = True
+except (ImportError, OSError):
+    PdfExportAvailable = False
+
+st.set_page_config(page_title="Báo cáo Doanh số & Doanh thu", layout="wide")
 
 if "user" not in st.session_state:
-    st.error("Vui long dang nhap tu trang chu.")
+    st.error("Vui lòng đăng nhập từ trang chủ.")
     st.stop()
 
-user = st.session_state["user"]
-st.title("💰 Doanh so & Doanh thu")
+CurrentUser = st.session_state["user"]
+st.caption("Doanh số > Tổng quan")
+st.title("Doanh số")
 
-db = get_db()
+DatabaseSession = get_db()
 try:
-    sales_rows = db.query(SaleRecord).all()
-    dealer_rows = db.query(DealerMaster).all()
-    product_rows = db.query(ProductMaster).all()
-    target_rows = db.query(SalesTarget).all()
+    SalesRows = DatabaseSession.query(SaleRecord).all()
+    DealerRows = DatabaseSession.query(DealerMaster).all()
+    ProductRows = DatabaseSession.query(ProductMaster).all()
+    TargetRows = DatabaseSession.query(SalesTarget).all()
 finally:
-    db.close()
+    DatabaseSession.close()
 
-if not sales_rows:
-    st.info("Khong co du lieu ban hang. Vui long tai du lieu len qua trang Upload.")
+if not SalesRows:
+    st.info("Không có dữ liệu bán hàng. Vui lòng tải dữ liệu lên qua trang Upload.")
     st.stop()
 
-df = pd.DataFrame([r.__dict__ for r in sales_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-df["date_transfer"] = pd.to_datetime(df["date_transfer"], dayfirst=True, errors="coerce")
-df["month"] = df["date_transfer"].dt.to_period("M").astype(str)
-df["month_year"] = df["date_transfer"].dt.strftime("%m/%Y")
-df[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]] = (
-    df[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]].apply(pd.to_numeric, errors="coerce")
+MainDataFrame = pd.DataFrame([r.__dict__ for r in SalesRows]).drop(columns=["_sa_instance_state"], errors="ignore")
+MainDataFrame["date_transfer"] = pd.to_datetime(MainDataFrame["date_transfer"], dayfirst=True, errors="coerce")
+MainDataFrame["month_year"] = MainDataFrame["date_transfer"].dt.strftime("%m/%Y")
+MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]] = (
+    MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]].apply(pd.to_numeric, errors="coerce")
 )
 
-# Join with dealer_master to get region
-if dealer_rows:
-    dealer_df = pd.DataFrame([r.__dict__ for r in dealer_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-    df = df.merge(dealer_df[["dealer_id", "region", "province"]], on="dealer_id", how="left")
+# Join with Dealer Master to retrieve geographic region
+if DealerRows:
+    DealerDataFrame = pd.DataFrame([r.__dict__ for r in DealerRows]).drop(columns=["_sa_instance_state"], errors="ignore")
+    DealerDataFrame["dealer_id"] = DealerDataFrame["dealer_id"].str.strip()
+    MainDataFrame["dealer_id"] = MainDataFrame["dealer_id"].str.strip()
+    
+    def FixRegion(row):
+        """Apply auto-assignment rule for region based on sub_region code"""
+        if pd.notna(row.get("region")) and str(row.get("region")).strip() not in ["", "Unknown"]:
+            return row["region"]
+        SubRegionCode = str(row.get("sub_region", "")).strip().upper()
+        if "MN" in SubRegionCode: return "Miền Nam"
+        if "MB" in SubRegionCode: return "Miền Bắc"
+        if "MT" in SubRegionCode: return "Miền Trung"
+        return "Unknown"
+    
+    DealerDataFrame["region"] = DealerDataFrame.apply(FixRegion, axis=1)
+    MainDataFrame = MainDataFrame.merge(DealerDataFrame[["dealer_id", "dealer_name", "region", "province"]], on="dealer_id", how="left")
 else:
-    df["region"] = ""
-    df["province"] = ""
+    MainDataFrame["dealer_name"] = ""
+    MainDataFrame["region"] = "Unknown"
+    MainDataFrame["province"] = ""
 
-# Join with product_master to get brand_group
-if product_rows:
-    product_df = pd.DataFrame([r.__dict__ for r in product_rows]).drop(columns=["_sa_instance_state"], errors="ignore")
-    df = df.merge(product_df[["item_id", "brand_group", "brand", "category"]], on="item_id", how="left")
+# Join with Product Master to retrieve brand grouping
+if ProductRows:
+    ProductDataFrame = pd.DataFrame([r.__dict__ for r in ProductRows]).drop(columns=["_sa_instance_state"], errors="ignore")
+    ProductDataFrame["item_id"] = ProductDataFrame["item_id"].str.strip()
+    MainDataFrame["item_id"] = MainDataFrame["item_id"].str.strip()
+    
+    def FixBrandGroup(row):
+        """Apply custom business rules for brand categorization"""
+        Category = str(row.get("category", "")).strip().lower()
+        BrandName = str(row.get("brand", "")).strip().lower()
+        SubCategory = str(row.get("subcategory", "")).strip().lower()
+        
+        if Category == "gears": return "gears"
+        if Category == "bikes":
+            if any(x in SubCategory for x in ["e-bikes", "e-scooters"]): return "others"
+            if any(x in BrandName for x in ["jeep", "hitasa"]): return "others"
+            if any(x in BrandName for x in ["giant", "liv", "momentum"]): return "giant bikes"
+            if "java" in BrandName: return "java bikes"
+            return "oem bikes"
+        return "others"
+    
+    ProductDataFrame["brand_group"] = ProductDataFrame.apply(FixBrandGroup, axis=1)
+    MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "brand_group", "brand", "category"]], on="item_id", how="left")
 else:
-    df["brand_group"] = ""
-    df["brand"] = ""
-    df["category"] = ""
+    MainDataFrame["brand_group"] = "others"
+    MainDataFrame["brand"] = ""
+    MainDataFrame["category"] = ""
 
-# Sidebar filters
-st.sidebar.header("Bo loc")
+MainDataFrame["region"] = MainDataFrame["region"].fillna("Unknown")
+MainDataFrame["brand_group"] = MainDataFrame["brand_group"].fillna("others")
 
-# Time period filter
-time_options = {
-    "Hom nay": "D",
-    "Tuan nay": "W",
-    "Thang nay": "M",
-    "Thang truoc": "LM",
-    "Quy": "Q",
-    "Nam": "Y",
-    "Tuy chinh": "Custom"
+BrandLabelMap = {
+    "gears": "Phụ kiện",
+    "giant bikes": "Xe Giant",
+    "java bikes": "Xe Java",
+    "oem bikes": "Xe OEM",
+    "others": "Khác"
 }
-sel_time = st.sidebar.selectbox("Khoang thoi gian", list(time_options.keys()))
+MainDataFrame["brand_group"] = MainDataFrame["brand_group"].map(BrandLabelMap).fillna("Khác")
 
-# Region filter
-regions = ["Tat ca"] + sorted(df["region"].dropna().unique().tolist())
-sel_region = st.sidebar.selectbox("Vung mien", regions)
+st.sidebar.header("Bộ lọc")
 
-# Brand Group filter
-brand_groups = ["Tat Ca"] + sorted(df["brand_group"].dropna().unique().tolist())
-sel_brand = st.sidebar.selectbox("Nhom thuong hieu", brand_groups)
+TimeOptions = {
+    "Hôm nay": "D",
+    "Tuần này": "W",
+    "Tháng này": "M",
+    "Tháng trước": "LM",
+    "Quý": "Q",
+    "Năm": "Y",
+    "Tùy chỉnh": "Custom"
+}
+SelectedTime = st.sidebar.selectbox("Khoảng thời gian", list(TimeOptions.keys()), index=2)
 
-# Salesperson filter
-salespeople = ["Tat Ca"] + sorted(df["salesperson"].dropna().unique().tolist())
-sel_salesperson = st.sidebar.selectbox("Nhan vien ban hang", salespeople)
+RegionList = ["Tất cả"] + sorted(MainDataFrame["region"].dropna().unique().tolist())
+SelectedRegion = st.sidebar.selectbox("Vùng miền", RegionList)
 
-# Channel filter
-channels = ["Tat Ca"] + sorted(df["channel_name"].dropna().unique().tolist())
-sel_channel = st.sidebar.selectbox("Kenh", channels)
+BrandGroupList = ["Tất cả"] + sorted(MainDataFrame["brand_group"].dropna().unique().tolist())
+SelectedBrand = st.sidebar.selectbox("Nhóm thương hiệu", BrandGroupList)
 
-# Apply time filter
-today = pd.Timestamp.now()
-fdf = df.copy()
+SalespersonList = ["Tất cả"] + sorted(MainDataFrame["salesperson"].dropna().unique().tolist())
+SelectedSalesperson = st.sidebar.selectbox("Nhân viên bán hàng", SalespersonList)
 
-if sel_time == "Hom nay":
-    fdf = fdf[fdf["date_transfer"].dt.date == today.date()]
-elif sel_time == "Tuan nay":
-    week_start = today - pd.Timedelta(days=today.weekday())
-    fdf = fdf[fdf["date_transfer"] >= week_start]
-elif sel_time == "Thang nay":
-    fdf = fdf[(fdf["date_transfer"].dt.month == today.month) & (fdf["date_transfer"].dt.year == today.year)]
-elif sel_time == "Thang truoc":
-    last_month = today - pd.DateOffset(months=1)
-    fdf = fdf[(fdf["date_transfer"].dt.month == last_month.month) & (fdf["date_transfer"].dt.year == last_month.year)]
-elif sel_time == "Quy":
-    quarter = (today.month - 1) // 3 + 1
-    fdf = fdf[(fdf["date_transfer"].dt.quarter == quarter) & (fdf["date_transfer"].dt.year == today.year)]
-elif sel_time == "Nam":
-    fdf = fdf[fdf["date_transfer"].dt.year == today.year]
-elif sel_time == "Tuy chinh":
-    date_range = st.sidebar.date_input("Chon khoang thoi gian", [today - pd.Timedelta(days=30), today])
-    if len(date_range) == 2:
-        fdf = fdf[(fdf["date_transfer"].dt.date >= date_range[0]) & (fdf["date_transfer"].dt.date <= date_range[1])]
+ChannelList = ["Tất cả"] + sorted(MainDataFrame["channel_name"].dropna().unique().tolist())
+SelectedChannel = st.sidebar.selectbox("Kênh", ChannelList)
 
-# Apply other filters
-if sel_region != "Tat Ca":
-    fdf = fdf[fdf["region"] == sel_region]
-if sel_brand != "Tat Ca":
-    fdf = fdf[fdf["brand_group"] == sel_brand]
-if sel_salesperson != "Tat Ca":
-    fdf = fdf[fdf["salesperson"] == sel_salesperson]
-if sel_channel != "Tat Ca":
-    fdf = fdf[fdf["channel_name"] == sel_channel]
+Today = pd.Timestamp.now()
+FilteredData = MainDataFrame.copy()
+PreviousFilteredData = MainDataFrame.copy()
 
-if fdf.empty:
-    st.warning("Khong co du lieu phu hop voi bo loc da chon.")
+if SelectedTime == "Hôm nay":
+    FilteredData = FilteredData[FilteredData["date_transfer"].dt.date == Today.date()]
+    PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["date_transfer"].dt.date == Today.date() - pd.Timedelta(days=1)]
+elif SelectedTime == "Tuần này":
+    WeekStart = Today - pd.Timedelta(days=Today.weekday())
+    FilteredData = FilteredData[FilteredData["date_transfer"] >= WeekStart]
+    PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"] >= WeekStart - pd.Timedelta(days=7)) & (PreviousFilteredData["date_transfer"] < WeekStart)]
+elif SelectedTime == "Tháng này":
+    FilteredData = FilteredData[(FilteredData["date_transfer"].dt.month == Today.month) & (FilteredData["date_transfer"].dt.year == Today.year)]
+    PreviousMonth = Today - pd.DateOffset(months=1)
+    PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"].dt.month == PreviousMonth.month) & 
+                        (PreviousFilteredData["date_transfer"].dt.year == PreviousMonth.year) &
+                        (PreviousFilteredData["date_transfer"].dt.date <= PreviousMonth.date())]
+elif SelectedTime == "Tháng trước":
+    LastMonth = Today - pd.DateOffset(months=1)
+    FilteredData = FilteredData[(FilteredData["date_transfer"].dt.month == LastMonth.month) & (FilteredData["date_transfer"].dt.year == LastMonth.year)]
+    PreviousToLastMonth = LastMonth - pd.DateOffset(months=1)
+    PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"].dt.month == PreviousToLastMonth.month) & (PreviousFilteredData["date_transfer"].dt.year == PreviousToLastMonth.year)]
+elif SelectedTime == "Quý":
+    Quarter = (Today.month - 1) // 3 + 1
+    FilteredData = FilteredData[(FilteredData["date_transfer"].dt.quarter == Quarter) & (FilteredData["date_transfer"].dt.year == Today.year)]
+    PreviousQuarterDate = Today - pd.DateOffset(months=3)
+    PreviousQuarter = (PreviousQuarterDate.month - 1) // 3 + 1
+    PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"].dt.quarter == PreviousQuarter) & 
+                        (PreviousFilteredData["date_transfer"].dt.year == PreviousQuarterDate.year) &
+                        (PreviousFilteredData["date_transfer"].dt.date <= PreviousQuarterDate.date())]
+elif SelectedTime == "Năm":
+    FilteredData = FilteredData[FilteredData["date_transfer"].dt.year == Today.year]
+    PreviousYear = Today - pd.DateOffset(years=1)
+    PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"].dt.year == PreviousYear.year) &
+                        (PreviousFilteredData["date_transfer"].dt.date <= PreviousYear.date())]
+elif SelectedTime == "Tùy chỉnh":
+    DateRangeInput = st.sidebar.date_input("Chọn khoảng thời gian", [Today - pd.Timedelta(days=30), Today])
+    if len(DateRangeInput) == 2:
+        FilteredData = FilteredData[(FilteredData["date_transfer"].dt.date >= DateRangeInput[0]) & (FilteredData["date_transfer"].dt.date <= DateRangeInput[1])]
+        RangeDelta = DateRangeInput[1] - DateRangeInput[0] + pd.Timedelta(days=1)
+        PreviousStart = DateRangeInput[0] - RangeDelta
+        PreviousEnd = DateRangeInput[0] - pd.Timedelta(days=1)
+        PreviousFilteredData = PreviousFilteredData[(PreviousFilteredData["date_transfer"].dt.date >= PreviousStart) & (PreviousFilteredData["date_transfer"].dt.date <= PreviousEnd)]
+
+if SelectedRegion != "Tất cả":
+    FilteredData = FilteredData[FilteredData["region"] == SelectedRegion]
+    PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["region"] == SelectedRegion]
+if SelectedBrand != "Tất cả":
+    FilteredData = FilteredData[FilteredData["brand_group"] == SelectedBrand]
+    PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["brand_group"] == SelectedBrand]
+if SelectedSalesperson != "Tất cả":
+    FilteredData = FilteredData[FilteredData["salesperson"] == SelectedSalesperson]
+    PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["salesperson"] == SelectedSalesperson]
+if SelectedChannel != "Tất cả":
+    FilteredData = FilteredData[FilteredData["channel_name"] == SelectedChannel]
+    PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["channel_name"] == SelectedChannel]
+
+if FilteredData.empty:
+    st.warning("Không có dữ liệu phù hợp với bộ lọc đã chọn.")
     st.stop()
 
-# Calculate KPIs
-total_rev = calc_total_revenue(fdf)
-profit, margin = calc_gross_profit(fdf)
-total_vol = int(fdf["sales_volume"].sum())
+CurrentTotalRevenue = calc_total_revenue(FilteredData)
+_, MarginValue = calc_gross_profit(FilteredData)
+CurrentTotalVolume = int(FilteredData["sales_volume"].sum())
+CurrentTotalOrders = FilteredData["order_id"].nunique()
+CurrentAvgOrderValue = CurrentTotalRevenue / CurrentTotalOrders if CurrentTotalOrders > 0 else 0.0
 
-# Calculate growth rate (compare with previous period)
-prev_fdf = df[df["date_transfer"] < fdf["date_transfer"].min()]
-if not prev_fdf.empty:
-    prev_rev = calc_total_revenue(prev_fdf)
-    growth_rate = ((total_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else 0.0
-    growth_delta = f"{growth_rate:+.1f}%"
-    growth_color = "normal" if growth_rate >= 0 else "inverse"
+if not PreviousFilteredData.empty:
+    PreviousRevenue = calc_total_revenue(PreviousFilteredData)
+    PreviousVolume = int(PreviousFilteredData["sales_volume"].sum())
+    PreviousOrders = PreviousFilteredData["order_id"].nunique()
+    PreviousAvgOrder = PreviousRevenue / PreviousOrders if PreviousOrders > 0 else 0.0
+
+    RevenueGrowth = ((CurrentTotalRevenue - PreviousRevenue) / PreviousRevenue * 100) if PreviousRevenue > 0 else 0.0
+    VolumeGrowth = ((CurrentTotalVolume - PreviousVolume) / PreviousVolume * 100) if PreviousVolume > 0 else 0.0
+    OrderGrowth = ((CurrentTotalOrders - PreviousOrders) / PreviousOrders * 100) if PreviousOrders > 0 else 0.0
+    AvgOrderGrowth = ((CurrentAvgOrderValue - PreviousAvgOrder) / PreviousAvgOrder * 100) if PreviousAvgOrder > 0 else 0.0
+
+    RevenueDelta = f"{RevenueGrowth:+.1f}% (Cùng kỳ)"
+    VolumeDelta = f"{VolumeGrowth:+.1f}% (Cùng kỳ)"
+    OrderDelta = f"{OrderGrowth:+.1f}% (Cùng kỳ)"
+    AvgOrderDelta = f"{AvgOrderGrowth:+.1f}% (Cùng kỳ)"
 else:
-    growth_rate = 0.0
-    growth_delta = "N/A"
-    growth_color = "normal"
+    RevenueDelta = "N/A"
+    VolumeDelta = "N/A"
+    OrderDelta = "N/A"
+    AvgOrderDelta = "N/A"
 
-# Calculate AR ratio (outstanding / revenue)
-# This is a simplified calculation - in production, you'd need AR data
-ar_ratio = 0.0
-ar_delta = "N/A"
+if SelectedRegion == "Tất cả":
+    RelevantTargets = TargetRows
+else:
+    RegionCodeMap = {"Miền Nam": "MN", "Miền Bắc": "MB", "Miền Trung": "MT"}
+    RegionCode = RegionCodeMap.get(SelectedRegion)
+    RelevantTargets = [t for t in TargetRows if t.sub_region and t.sub_region.startswith(RegionCode)] if RegionCode else TargetRows
 
-# Calculate average order value
-total_orders = fdf["order_id"].nunique()
-avg_order_value = total_rev / total_orders if total_orders > 0 else 0.0
+TargetRevenue = sum(t.target_revenue or 0 for t in RelevantTargets)
+CompletionRate = calc_target_completion(CurrentTotalRevenue, TargetRevenue)
 
-# Calculate target completion
-target_rev = sum(t.target_revenue or 0 for t in target_rows)
-completion = calc_target_completion(total_rev, target_rev)
-
-# Render KPI cards
 render_kpi_row([
-    {"label": "Doanh thu tong", "value": f"{total_rev:,.0f} VND"},
-    {"label": "Tong so luong", "value": f"{total_vol:,} don vi"},
-    {"label": "Toc do tang truong", "value": f"{growth_rate:.1f}%", "delta": growth_delta, "delta_color": growth_color},
-    {"label": "Ty le cong no", "value": f"{ar_ratio:.1f}%", "delta": ar_delta},
-    {"label": "Gia tri don hang TB", "value": f"{avg_order_value:,.0f} VND"},
+    {"label": "Doanh số tổng", "value": f"₫{CurrentTotalRevenue:,.0f}", "delta": RevenueDelta},
+    {"label": "Tổng số đơn", "value": f"{CurrentTotalOrders:,}", "delta": OrderDelta},
+    {"label": "Tổng số lượng", "value": f"{CurrentTotalVolume:,}", "delta": VolumeDelta},
+    {"label": "Giá trị đơn hàng", "value": f"₫{CurrentAvgOrderValue:,.0f}", "delta": AvgOrderDelta},
+    {"label": "Hoàn thành mục tiêu", "value": f"{CompletionRate:.1f}%", "delta": f"Mục tiêu: ₫{TargetRevenue:,.0f}"},
 ])
 
-# Export PDF button
-if st.button("📄 Xuat PDF"):
-    html = build_dashboard_html(
-        kpis={
-            "Doanh thu tong": f"{total_rev:,.0f} VND",
-            "Tong so luong": f"{total_vol:,} don vi",
-            "Toc do tang truong": f"{growth_rate:.1f}%",
-            "Ty le cong no": f"{ar_ratio:.1f}%",
-            "Gia tri don hang TB": f"{avg_order_value:,.0f} VND",
-        },
-        tables=[]
-    )
-    pdf_bytes = generate_pdf_bytes(html)
-    st.download_button("Tai PDF", data=pdf_bytes, file_name="bao_cao_dealer_report.pdf", mime="application/pdf")
+if PdfExportAvailable:
+    ColExp1, ColExp2, ColExp3 = st.columns(3)
+    with ColExp1:
+        if st.button("Xuất PDF"):
+            DashboardHtml = build_dashboard_html(
+                kpis={
+                    "Doanh số tổng": f"₫{CurrentTotalRevenue:,.0f} ({RevenueDelta})",
+                    "Tổng số đơn": f"{CurrentTotalOrders:,} ({OrderDelta})",
+                    "Tổng số lượng": f"{CurrentTotalVolume:,} ({VolumeDelta})",
+                    "Giá trị đơn hàng": f"₫{CurrentAvgOrderValue:,.0f} ({AvgOrderDelta})",
+                    "Hoàn thành mục tiêu": f"{CompletionRate:.1f}% (Mục tiêu: ₫{TargetRevenue:,.0f})",
+                },
+                tables=[]
+            )
+            PdfBytesContent = generate_pdf_bytes(DashboardHtml)
+            st.download_button("Tải PDF", data=PdfBytesContent, file_name="bao_cao_dealer_report.pdf", mime="application/pdf")
+    
+    with ColExp2:
+        if st.button("Xuất PowerPoint"):
+            PptBytesContent = generate_ppt_bytes(
+                kpis={
+                    "Doanh số tổng": f"₫{CurrentTotalRevenue:,.0f} ({RevenueDelta})",
+                    "Tổng số đơn": f"{CurrentTotalOrders:,} ({OrderDelta})",
+                    "Tổng số lượng": f"{CurrentTotalVolume:,} ({VolumeDelta})",
+                    "Giá trị đơn hàng": f"₫{CurrentAvgOrderValue:,.0f} ({AvgOrderDelta})",
+                    "Hoàn thành mục tiêu": f"{CompletionRate:.1f}% (Mục tiêu: ₫{TargetRevenue:,.0f})",
+                }
+            )
+            st.download_button("Tải PowerPoint", data=PptBytesContent, file_name="bao_cao_dealer_report.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
+    with ColExp3:
+        CsvDataContent = FilteredData.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("Tải CSV", data=CsvDataContent, file_name="du_lieu_ban_hang.csv", mime="text/csv")
+else:
+    st.info("Tính năng xuất PDF không khả dụng (thiếu thư viện GTK). Vui lòng cài đặt GTK để sử dụng PDF export.")
 
 st.divider()
 
-# Charts section
-col1, col2 = st.columns(2)
+ChartCol1, ChartCol2 = st.columns(2)
 
-# Revenue trend by month
-by_month = fdf.groupby("month_year")["sales_revenue"].sum().reset_index().sort_values("month_year")
-col1.plotly_chart(
-    line_chart(by_month, "month_year", "sales_revenue", "Xu huong doanh thu"),
+# Revenue trends visualization
+MonthlyRevenueTrend = FilteredData.groupby("month_year")["sales_revenue"].sum().reset_index().sort_values("month_year")
+ChartCol1.plotly_chart(
+    line_chart(MonthlyRevenueTrend, "month_year", "sales_revenue", "Xu hướng doanh thu"),
     use_container_width=True
 )
 
-# Regional breakdown
-by_region = fdf.groupby("region")["sales_revenue"].sum().reset_index().sort_values("sales_revenue", ascending=False)
-col2.plotly_chart(
-    bar_chart(by_region, "region", "sales_revenue", "Phan vung kinh doanh"),
-    use_container_width=True
-)
-
-col3, col4 = st.columns(2)
-
-# Brand performance pie chart
-by_brand = fdf.groupby("brand_group")["sales_revenue"].sum().reset_index().sort_values("sales_revenue", ascending=False)
-col3.plotly_chart(
-    pie_chart(by_brand, "brand_group", "sales_revenue", "Hieu suat thuong hieu"),
-    use_container_width=True
-)
-
-# Salesperson performance
-by_salesperson = fdf.groupby("salesperson").agg(
+# Geographic breakdown visualization
+RegionalCurrentStats = FilteredData.groupby("region").agg(
     revenue=("sales_revenue", "sum"),
     volume=("sales_volume", "sum"),
     dealers=("dealer_id", "nunique")
-).reset_index().sort_values("revenue", ascending=False)
+).reset_index()
 
-col4.plotly_chart(
-    bar_chart(by_salesperson, "salesperson", "revenue", "Hieu suat nhan vien ban hang"),
+RegionalPreviousRevenue = PreviousFilteredData.groupby("region")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+RegionalComparisonData = RegionalCurrentStats.merge(RegionalPreviousRevenue, on="region", how="left", suffixes=("", "_prev"))
+
+RegionalComparisonData["growth"] = ((RegionalComparisonData["revenue"] - RegionalComparisonData["revenue_prev"]) / RegionalComparisonData["revenue_prev"] * 100).fillna(0)
+RegionalComparisonData["Tăng trưởng"] = RegionalComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+
+ChartCol2.plotly_chart(
+    bar_chart(RegionalCurrentStats, "region", "revenue", "Phân vùng kinh doanh"),
     use_container_width=True
 )
+with ChartCol2:
+    RegionalDisplayTable = RegionalComparisonData[["region", "revenue", "volume", "dealers", "Tăng trưởng"]].copy()
+    RegionalDisplayTable.columns = ["Vùng", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
+    st.dataframe(
+        RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+            "Số lượng": st.column_config.NumberColumn(format="%,d"),
+            "Số đối tác": st.column_config.NumberColumn(format="%,d")
+        }
+    )
+
+ChartCol3, ChartCol4 = st.columns(2)
+
+# Brand performance visualization
+BrandCurrentStats = FilteredData.groupby("brand_group").agg(
+    revenue=("sales_revenue", "sum"),
+    volume=("sales_volume", "sum")
+).reset_index()
+
+BrandPreviousRevenue = PreviousFilteredData.groupby("brand_group")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+BrandComparisonData = BrandCurrentStats.merge(BrandPreviousRevenue, on="brand_group", how="left", suffixes=("", "_prev"))
+
+BrandComparisonData["growth"] = ((BrandComparisonData["revenue"] - BrandComparisonData["revenue_prev"]) / BrandComparisonData["revenue_prev"] * 100).fillna(0)
+BrandComparisonData["Tăng trưởng"] = BrandComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+
+ChartCol3.plotly_chart(
+    bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "brand_group", "revenue", "Hiệu suất thương hiệu"),
+    use_container_width=True
+)
+with ChartCol3:
+    BrandDisplayTable = BrandComparisonData.sort_values("revenue", ascending=False)
+    BrandDisplayTable = BrandDisplayTable[["brand_group", "revenue", "volume", "Tăng trưởng"]]
+    BrandDisplayTable.columns = ["Nhóm thương hiệu", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+    st.dataframe(
+        BrandDisplayTable, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+            "Số lượng": st.column_config.NumberColumn(format="%,d")
+        }
+    )
+
+# Sales staff performance visualization
+StaffCurrentStats = FilteredData.groupby("salesperson").agg(
+    revenue=("sales_revenue", "sum"),
+    volume=("sales_volume", "sum"),
+    dealers=("dealer_id", "nunique")
+).reset_index()
+
+StaffPreviousRevenue = PreviousFilteredData.groupby("salesperson")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+StaffComparisonData = StaffCurrentStats.merge(StaffPreviousRevenue, on="salesperson", how="left", suffixes=("", "_prev"))
+
+StaffComparisonData["growth"] = ((StaffComparisonData["revenue"] - StaffComparisonData["revenue_prev"]) / StaffComparisonData["revenue_prev"] * 100).fillna(0)
+StaffComparisonData["Tăng trưởng"] = StaffComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+
+ChartCol4.plotly_chart(
+    horizontal_bar_chart(StaffCurrentStats.sort_values("revenue", ascending=True), "revenue", "salesperson", "Hiệu suất nhân viên bán hàng"),
+    use_container_width=True
+)
+with ChartCol4:
+    StaffDisplayTable = StaffComparisonData.sort_values("revenue", ascending=False)
+    StaffDisplayTable = StaffDisplayTable[["salesperson", "revenue", "volume", "dealers", "Tăng trưởng"]]
+    StaffDisplayTable.columns = ["Nhân viên", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
+    st.dataframe(
+        StaffDisplayTable, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+            "Số lượng": st.column_config.NumberColumn(format="%,d"),
+            "Số đối tác": st.column_config.NumberColumn(format="%,d")
+        }
+    )
 
 st.divider()
 
-# Top 10 dealers
-by_dealer = fdf.groupby(["dealer_id", "dealer_name"]).agg(
+# Dealer ranking details
+TopDealerData = FilteredData.groupby(["dealer_id", "dealer_name"]).agg(
     revenue=("sales_revenue", "sum"),
     volume=("sales_volume", "sum"),
     province=("province", "first")
 ).reset_index().sort_values("revenue", ascending=False).head(10)
 
-st.subheader("Top 10 Doi tac theo Doanh thu")
-by_dealer_display = by_dealer[["dealer_name", "province", "revenue", "volume"]].copy()
-by_dealer_display.columns = ["Ten doi tac", "Tinh", "Doanh thu (VND)", "So luong"]
-st.dataframe(by_dealer_display, use_container_width=True)
+st.subheader("Top 10 Đối tác theo Doanh số")
+st.plotly_chart(
+    horizontal_bar_chart(TopDealerData.sort_values("revenue", ascending=True), "revenue", "dealer_name", "Biểu đồ Top 10 Đối tác"),
+    use_container_width=True
+)
 
-# Detailed tables
+PreviousDealerRevenue = PreviousFilteredData.groupby("dealer_id")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+TopDealerData = TopDealerData.merge(PreviousDealerRevenue, on="dealer_id", how="left", suffixes=("", "_prev"))
+TopDealerData["growth"] = ((TopDealerData["revenue"] - TopDealerData["revenue_prev"]) / TopDealerData["revenue_prev"] * 100).fillna(0)
+TopDealerData["Tăng trưởng"] = TopDealerData["growth"].map(lambda x: f"{x:+.1f}%")
+TopDealerData["Hạng"] = range(1, len(TopDealerData) + 1)
+
+TopDealerDisplayTable = TopDealerData[["Hạng", "dealer_name", "province", "revenue", "volume", "Tăng trưởng"]].copy()
+TopDealerDisplayTable.columns = ["Hạng", "Tên đối tác", "Tỉnh", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+st.dataframe(
+    TopDealerDisplayTable, 
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+        "Số lượng": st.column_config.NumberColumn(format="%,d")
+    }
+)
+
 st.divider()
 
-col5, col6 = st.columns(2)
-
-# Regional performance table
-with col5:
-    st.subheader("Hieu suat theo Vung")
-    regional_perf = fdf.groupby("region").agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum"),
-        dealers=("dealer_id", "nunique")
-    ).reset_index()
-    regional_perf.columns = ["Vung", "Doanh thu (VND)", "So luong", "So doi tac"]
-    st.dataframe(regional_perf, use_container_width=True)
-
-# Salesperson performance table
-with col6:
-    st.subheader("Hieu suat Nhan vien")
-    salesperson_perf = fdf.groupby("salesperson").agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum"),
-        dealers=("dealer_id", "nunique")
-    ).reset_index().sort_values("revenue", ascending=False)
-    salesperson_perf.columns = ["Nhan vien", "Doanh thu (VND)", "So luong", "So doi tac"]
-    st.dataframe(salesperson_perf, use_container_width=True)
-
-# Raw data table (expandable)
-with st.expander("Xem du lieu goc"):
-    raw_cols = ["order_id", "date_transfer", "dealer_id", "dealer_name", "salesperson",
+# Raw data transaction log
+with st.expander("Xem dữ liệu gốc"):
+    RawColumnSelection = ["order_id", "date_transfer", "dealer_id", "dealer_name", "salesperson",
                 "channel_name", "brand_group", "sales_volume", "sales_revenue"]
-    raw_data = fdf[raw_cols].copy()
-    raw_data.columns = ["Ma don hang", "Ngay chuyen", "Ma doi tac", "Ten doi tac",
-                      "Nhan vien", "Kenh", "Nhom thuong hieu", "So luong", "Doanh thu"]
-    st.dataframe(raw_data.reset_index(drop=True), use_container_width=True)
+    RawTransactionLog = FilteredData[RawColumnSelection].copy()
+    RawTransactionLog.columns = ["Mã đơn hàng", "Ngày chuyển", "Mã đối tác", "Tên đối tác",
+                      "Nhân viên", "Kênh", "Nhóm thương hiệu", "Số lượng", "Doanh số"]
+    st.dataframe(
+        RawTransactionLog.reset_index(drop=True), 
+        use_container_width=True,
+        column_config={
+            "Doanh số": st.column_config.NumberColumn(format="%,d"),
+            "Số lượng": st.column_config.NumberColumn(format="%,d")
+        }
+    )
 
-# Add refresh button
-if st.button("Cap nhat du lieu"):
+if st.button("Cập nhật dữ liệu"):
     st.rerun()
 
-st.caption(f"Du lieu cap nhat luc: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')}")
+st.caption(f"Dữ liệu cập nhật lúc: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')}")
+
+# Hide the centered loader once rendering is complete
+PageLoader.empty()
