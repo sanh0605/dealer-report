@@ -119,13 +119,22 @@ try:
     if "filter_staff" not in st.session_state: st.session_state.filter_staff = []
     if "filter_channel" not in st.session_state: st.session_state.filter_channel = []
     if "filter_dealer" not in st.session_state: st.session_state.filter_dealer = []
+    
+    # Initialize previous selections to track changes
+    if "prev_reg_chart" not in st.session_state: st.session_state.prev_reg_chart = []
+    if "prev_reg_table" not in st.session_state: st.session_state.prev_reg_table = []
+    if "prev_brand_chart" not in st.session_state: st.session_state.prev_brand_chart = []
+    if "prev_brand_table" not in st.session_state: st.session_state.prev_brand_table = []
+    if "prev_staff_chart" not in st.session_state: st.session_state.prev_staff_chart = []
+    if "prev_staff_table" not in st.session_state: st.session_state.prev_staff_table = []
+    if "prev_dealer_chart" not in st.session_state: st.session_state.prev_dealer_chart = []
+    if "prev_dealer_table" not in st.session_state: st.session_state.prev_dealer_table = []
 
     if st.sidebar.button("Xóa tất cả bộ lọc", use_container_width=True):
-        st.session_state.filter_region = []
-        st.session_state.filter_brand = []
-        st.session_state.filter_staff = []
-        st.session_state.filter_channel = []
-        st.session_state.filter_dealer = []
+        for key in ["filter_region", "filter_brand", "filter_staff", "filter_channel", "filter_dealer",
+                    "prev_reg_chart", "prev_reg_table", "prev_brand_chart", "prev_brand_table",
+                    "prev_staff_chart", "prev_staff_table", "prev_dealer_chart", "prev_dealer_table"]:
+            st.session_state[key] = []
         st.rerun()
 
     TimeOptions = {
@@ -350,15 +359,18 @@ try:
         use_container_width=True,
         on_select="rerun"
     )
-    if RegChartRes.get("selection", {}).get("points"):
-        st.session_state.filter_region = [p["x"] for p in RegChartRes["selection"]["points"]]
+    new_reg_chart = [p["x"] for p in RegChartRes.get("selection", {}).get("points", [])]
+    if new_reg_chart != st.session_state.prev_reg_chart:
+        st.session_state.prev_reg_chart = new_reg_chart
+        st.session_state.filter_region = new_reg_chart
         st.rerun()
 
     with ChartCol2:
         RegionalDisplayTable = RegionalComparisonData[["region", "revenue", "volume", "dealers", "Tăng trưởng"]].copy()
         RegionalDisplayTable.columns = ["Vùng", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
+        RegionalSorted = RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False)
         RegTableRes = st.dataframe(
-            RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
+            RegionalSorted, 
             use_container_width=True, 
             hide_index=True,
             on_select="rerun",
@@ -369,9 +381,10 @@ try:
                 "Số đối tác": st.column_config.NumberColumn(format="%,d")
             }
         )
-        if RegTableRes.get("selection", {}).get("rows"):
-            SelectedTableRegions = RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False).iloc[RegTableRes["selection"]["rows"]]["Vùng"].tolist()
-            st.session_state.filter_region = SelectedTableRegions
+        new_reg_table = RegTableRes.get("selection", {}).get("rows", [])
+        if new_reg_table != st.session_state.prev_reg_table:
+            st.session_state.prev_reg_table = new_reg_table
+            st.session_state.filter_region = RegionalSorted.iloc[new_reg_table]["Vùng"].tolist()
             st.rerun()
 
     ChartCol3, ChartCol4 = st.columns(2)
@@ -393,8 +406,10 @@ try:
         use_container_width=True,
         on_select="rerun"
     )
-    if BrandChartRes.get("selection", {}).get("points"):
-        st.session_state.filter_brand = [p["x"] for p in BrandChartRes["selection"]["points"]]
+    new_brand_chart = [p["x"] for p in BrandChartRes.get("selection", {}).get("points", [])]
+    if new_brand_chart != st.session_state.prev_brand_chart:
+        st.session_state.prev_brand_chart = new_brand_chart
+        st.session_state.filter_brand = new_brand_chart
         st.rerun()
 
     with ChartCol3:
@@ -412,8 +427,10 @@ try:
                 "Số lượng": st.column_config.NumberColumn(format="%,d")
             }
         )
-        if BrandTableRes.get("selection", {}).get("rows"):
-            st.session_state.filter_brand = BrandDisplayTable.iloc[BrandTableRes["selection"]["rows"]]["Nhóm thương hiệu"].tolist()
+        new_brand_table = BrandTableRes.get("selection", {}).get("rows", [])
+        if new_brand_table != st.session_state.prev_brand_table:
+            st.session_state.prev_brand_table = new_brand_table
+            st.session_state.filter_brand = BrandDisplayTable.iloc[new_brand_table]["Nhóm thương hiệu"].tolist()
             st.rerun()
 
     # Sales staff performance visualization
@@ -434,8 +451,10 @@ try:
         use_container_width=True,
         on_select="rerun"
     )
-    if StaffChartRes.get("selection", {}).get("points"):
-        st.session_state.filter_staff = [p["y"] for p in StaffChartRes["selection"]["points"]]
+    new_staff_chart = [p["y"] for p in StaffChartRes.get("selection", {}).get("points", [])]
+    if new_staff_chart != st.session_state.prev_staff_chart:
+        st.session_state.prev_staff_chart = new_staff_chart
+        st.session_state.filter_staff = new_staff_chart
         st.rerun()
 
     with ChartCol4:
@@ -454,8 +473,10 @@ try:
                 "Số đối tác": st.column_config.NumberColumn(format="%,d")
             }
         )
-        if StaffTableRes.get("selection", {}).get("rows"):
-            st.session_state.filter_staff = StaffDisplayTable.iloc[StaffTableRes["selection"]["rows"]]["Nhân viên"].tolist()
+        new_staff_table = StaffTableRes.get("selection", {}).get("rows", [])
+        if new_staff_table != st.session_state.prev_staff_table:
+            st.session_state.prev_staff_table = new_staff_table
+            st.session_state.filter_staff = StaffDisplayTable.iloc[new_staff_table]["Nhân viên"].tolist()
             st.rerun()
 
     st.divider()
@@ -473,8 +494,10 @@ try:
         use_container_width=True,
         on_select="rerun"
     )
-    if TopDealerChartRes.get("selection", {}).get("points"):
-        st.session_state.filter_dealer = [p["y"] for p in TopDealerChartRes["selection"]["points"]]
+    new_dealer_chart = [p["y"] for p in TopDealerChartRes.get("selection", {}).get("points", [])]
+    if new_dealer_chart != st.session_state.prev_dealer_chart:
+        st.session_state.prev_dealer_chart = new_dealer_chart
+        st.session_state.filter_dealer = new_dealer_chart
         st.rerun()
 
     PreviousDealerRevenue = PreviousFilteredData.groupby("dealer_id")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
@@ -496,8 +519,10 @@ try:
             "Số lượng": st.column_config.NumberColumn(format="%,d")
         }
     )
-    if TopDealerTableRes.get("selection", {}).get("rows"):
-        st.session_state.filter_dealer = TopDealerDisplayTable.iloc[TopDealerTableRes["selection"]["rows"]]["Tên đối tác"].tolist()
+    new_dealer_table = TopDealerTableRes.get("selection", {}).get("rows", [])
+    if new_dealer_table != st.session_state.prev_dealer_table:
+        st.session_state.prev_dealer_table = new_dealer_table
+        st.session_state.filter_dealer = TopDealerDisplayTable.iloc[new_dealer_table]["Tên đối tác"].tolist()
         st.rerun()
     st.divider()
 
