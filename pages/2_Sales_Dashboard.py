@@ -113,30 +113,6 @@ try:
 
     st.sidebar.header("Bộ lọc")
 
-    # Initialize filter state if not exists
-    if "filter_region" not in st.session_state: st.session_state.filter_region = []
-    if "filter_brand" not in st.session_state: st.session_state.filter_brand = []
-    if "filter_staff" not in st.session_state: st.session_state.filter_staff = []
-    if "filter_channel" not in st.session_state: st.session_state.filter_channel = []
-    if "filter_dealer" not in st.session_state: st.session_state.filter_dealer = []
-    
-    # Initialize previous selections to track changes
-    if "prev_reg_chart" not in st.session_state: st.session_state.prev_reg_chart = []
-    if "prev_reg_table" not in st.session_state: st.session_state.prev_reg_table = []
-    if "prev_brand_chart" not in st.session_state: st.session_state.prev_brand_chart = []
-    if "prev_brand_table" not in st.session_state: st.session_state.prev_brand_table = []
-    if "prev_staff_chart" not in st.session_state: st.session_state.prev_staff_chart = []
-    if "prev_staff_table" not in st.session_state: st.session_state.prev_staff_table = []
-    if "prev_dealer_chart" not in st.session_state: st.session_state.prev_dealer_chart = []
-    if "prev_dealer_table" not in st.session_state: st.session_state.prev_dealer_table = []
-
-    if st.sidebar.button("Xóa tất cả bộ lọc", use_container_width=True):
-        for key in ["filter_region", "filter_brand", "filter_staff", "filter_channel", "filter_dealer",
-                    "prev_reg_chart", "prev_reg_table", "prev_brand_chart", "prev_brand_table",
-                    "prev_staff_chart", "prev_staff_table", "prev_dealer_chart", "prev_dealer_table"]:
-            st.session_state[key] = []
-        st.rerun()
-
     TimeOptions = {
         "Hôm nay": "D",
         "Tuần này": "W",
@@ -151,24 +127,16 @@ try:
     SelectedTime = st.sidebar.selectbox("Khoảng thời gian", list(TimeOptions.keys()), index=2)
 
     RegionList = sorted(MainDataFrame["region"].dropna().unique().tolist())
-    st.session_state.filter_region = st.sidebar.multiselect("Vùng miền", RegionList, default=st.session_state.filter_region)
-    SelectedRegion = st.session_state.filter_region
+    SelectedRegion = st.sidebar.multiselect("Vùng miền", RegionList)
 
     BrandGroupList = sorted(MainDataFrame["brand_group"].dropna().unique().tolist())
-    st.session_state.filter_brand = st.sidebar.multiselect("Nhóm thương hiệu", BrandGroupList, default=st.session_state.filter_brand)
-    SelectedBrand = st.session_state.filter_brand
+    SelectedBrand = st.sidebar.multiselect("Nhóm thương hiệu", BrandGroupList)
 
     SalespersonList = sorted(MainDataFrame["salesperson"].dropna().unique().tolist())
-    st.session_state.filter_staff = st.sidebar.multiselect("Nhân viên bán hàng", SalespersonList, default=st.session_state.filter_staff)
-    SelectedSalesperson = st.session_state.filter_staff
+    SelectedSalesperson = st.sidebar.multiselect("Nhân viên bán hàng", SalespersonList)
 
     ChannelList = sorted(MainDataFrame["channel_name"].dropna().unique().tolist())
-    st.session_state.filter_channel = st.sidebar.multiselect("Kênh", ChannelList, default=st.session_state.filter_channel)
-    SelectedChannel = st.session_state.filter_channel
-
-    DealerList = sorted(MainDataFrame["dealer_name"].dropna().unique().tolist())
-    st.session_state.filter_dealer = st.sidebar.multiselect("Đối tác", DealerList, default=st.session_state.filter_dealer)
-    SelectedDealer = st.session_state.filter_dealer
+    SelectedChannel = st.sidebar.multiselect("Kênh", ChannelList)
 
     Today = pd.Timestamp.now()
     FilteredData = MainDataFrame.copy()
@@ -238,9 +206,6 @@ try:
     if SelectedChannel:
         FilteredData = FilteredData[FilteredData["channel_name"].isin(SelectedChannel)]
         PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["channel_name"].isin(SelectedChannel)]
-    if SelectedDealer:
-        FilteredData = FilteredData[FilteredData["dealer_name"].isin(SelectedDealer)]
-        PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["dealer_name"].isin(SelectedDealer)]
 
     if FilteredData.empty:
         st.warning("Không có dữ liệu phù hợp với bộ lọc đã chọn.")
@@ -354,38 +319,23 @@ try:
     RegionalComparisonData["growth"] = ((RegionalComparisonData["revenue"] - RegionalComparisonData["revenue_prev"]) / RegionalComparisonData["revenue_prev"] * 100).fillna(0)
     RegionalComparisonData["Tăng trưởng"] = RegionalComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    RegChartRes = ChartCol2.plotly_chart(
+    ChartCol2.plotly_chart(
         bar_chart(RegionalCurrentStats, "region", "revenue", "Phân vùng kinh doanh"),
-        use_container_width=True,
-        on_select="rerun"
+        use_container_width=True
     )
-    new_reg_chart = [p["x"] for p in RegChartRes.get("selection", {}).get("points", [])]
-    if new_reg_chart != st.session_state.prev_reg_chart:
-        st.session_state.prev_reg_chart = new_reg_chart
-        st.session_state.filter_region = new_reg_chart
-        st.rerun()
-
     with ChartCol2:
         RegionalDisplayTable = RegionalComparisonData[["region", "revenue", "volume", "dealers", "Tăng trưởng"]].copy()
         RegionalDisplayTable.columns = ["Vùng", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
-        RegionalSorted = RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False)
-        RegTableRes = st.dataframe(
-            RegionalSorted, 
+        st.dataframe(
+            RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
             use_container_width=True, 
             hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row",
             column_config={
                 "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
                 "Số lượng": st.column_config.NumberColumn(format="%,d"),
                 "Số đối tác": st.column_config.NumberColumn(format="%,d")
             }
         )
-        new_reg_table = RegTableRes.get("selection", {}).get("rows", [])
-        if new_reg_table != st.session_state.prev_reg_table:
-            st.session_state.prev_reg_table = new_reg_table
-            st.session_state.filter_region = RegionalSorted.iloc[new_reg_table]["Vùng"].tolist()
-            st.rerun()
 
     ChartCol3, ChartCol4 = st.columns(2)
 
@@ -401,37 +351,23 @@ try:
     BrandComparisonData["growth"] = ((BrandComparisonData["revenue"] - BrandComparisonData["revenue_prev"]) / BrandComparisonData["revenue_prev"] * 100).fillna(0)
     BrandComparisonData["Tăng trưởng"] = BrandComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    BrandChartRes = ChartCol3.plotly_chart(
+    ChartCol3.plotly_chart(
         bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "brand_group", "revenue", "Hiệu suất thương hiệu"),
-        use_container_width=True,
-        on_select="rerun"
+        use_container_width=True
     )
-    new_brand_chart = [p["x"] for p in BrandChartRes.get("selection", {}).get("points", [])]
-    if new_brand_chart != st.session_state.prev_brand_chart:
-        st.session_state.prev_brand_chart = new_brand_chart
-        st.session_state.filter_brand = new_brand_chart
-        st.rerun()
-
     with ChartCol3:
         BrandDisplayTable = BrandComparisonData.sort_values("revenue", ascending=False)
         BrandDisplayTable = BrandDisplayTable[["brand_group", "revenue", "volume", "Tăng trưởng"]]
         BrandDisplayTable.columns = ["Nhóm thương hiệu", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
-        BrandTableRes = st.dataframe(
+        st.dataframe(
             BrandDisplayTable, 
             use_container_width=True, 
             hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row",
             column_config={
                 "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
                 "Số lượng": st.column_config.NumberColumn(format="%,d")
             }
         )
-        new_brand_table = BrandTableRes.get("selection", {}).get("rows", [])
-        if new_brand_table != st.session_state.prev_brand_table:
-            st.session_state.prev_brand_table = new_brand_table
-            st.session_state.filter_brand = BrandDisplayTable.iloc[new_brand_table]["Nhóm thương hiệu"].tolist()
-            st.rerun()
 
     # Sales staff performance visualization
     StaffCurrentStats = FilteredData.groupby("salesperson").agg(
@@ -446,38 +382,24 @@ try:
     StaffComparisonData["growth"] = ((StaffComparisonData["revenue"] - StaffComparisonData["revenue_prev"]) / StaffComparisonData["revenue_prev"] * 100).fillna(0)
     StaffComparisonData["Tăng trưởng"] = StaffComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    StaffChartRes = ChartCol4.plotly_chart(
+    ChartCol4.plotly_chart(
         horizontal_bar_chart(StaffCurrentStats.sort_values("revenue", ascending=True), "revenue", "salesperson", "Hiệu suất nhân viên bán hàng"),
-        use_container_width=True,
-        on_select="rerun"
+        use_container_width=True
     )
-    new_staff_chart = [p["y"] for p in StaffChartRes.get("selection", {}).get("points", [])]
-    if new_staff_chart != st.session_state.prev_staff_chart:
-        st.session_state.prev_staff_chart = new_staff_chart
-        st.session_state.filter_staff = new_staff_chart
-        st.rerun()
-
     with ChartCol4:
         StaffDisplayTable = StaffComparisonData.sort_values("revenue", ascending=False)
         StaffDisplayTable = StaffDisplayTable[["salesperson", "revenue", "volume", "dealers", "Tăng trưởng"]]
         StaffDisplayTable.columns = ["Nhân viên", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
-        StaffTableRes = st.dataframe(
+        st.dataframe(
             StaffDisplayTable, 
             use_container_width=True, 
             hide_index=True,
-            on_select="rerun",
-            selection_mode="multi-row",
             column_config={
                 "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
                 "Số lượng": st.column_config.NumberColumn(format="%,d"),
                 "Số đối tác": st.column_config.NumberColumn(format="%,d")
             }
         )
-        new_staff_table = StaffTableRes.get("selection", {}).get("rows", [])
-        if new_staff_table != st.session_state.prev_staff_table:
-            st.session_state.prev_staff_table = new_staff_table
-            st.session_state.filter_staff = StaffDisplayTable.iloc[new_staff_table]["Nhân viên"].tolist()
-            st.rerun()
 
     st.divider()
 
@@ -489,16 +411,10 @@ try:
     ).reset_index().sort_values("revenue", ascending=False).head(10)
 
     st.subheader("Top 10 Đối tác theo Doanh số")
-    TopDealerChartRes = st.plotly_chart(
+    st.plotly_chart(
         horizontal_bar_chart(TopDealerData.sort_values("revenue", ascending=True), "revenue", "dealer_name", "Biểu đồ Top 10 Đối tác"),
-        use_container_width=True,
-        on_select="rerun"
+        use_container_width=True
     )
-    new_dealer_chart = [p["y"] for p in TopDealerChartRes.get("selection", {}).get("points", [])]
-    if new_dealer_chart != st.session_state.prev_dealer_chart:
-        st.session_state.prev_dealer_chart = new_dealer_chart
-        st.session_state.filter_dealer = new_dealer_chart
-        st.rerun()
 
     PreviousDealerRevenue = PreviousFilteredData.groupby("dealer_id")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
     TopDealerData = TopDealerData.merge(PreviousDealerRevenue, on="dealer_id", how="left", suffixes=("", "_prev"))
@@ -508,22 +424,16 @@ try:
 
     TopDealerDisplayTable = TopDealerData[["Hạng", "dealer_name", "province", "revenue", "volume", "Tăng trưởng"]].copy()
     TopDealerDisplayTable.columns = ["Hạng", "Tên đối tác", "Tỉnh", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
-    TopDealerTableRes = st.dataframe(
+    st.dataframe(
         TopDealerDisplayTable, 
         use_container_width=True,
         hide_index=True,
-        on_select="rerun",
-        selection_mode="multi-row",
         column_config={
             "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
             "Số lượng": st.column_config.NumberColumn(format="%,d")
         }
     )
-    new_dealer_table = TopDealerTableRes.get("selection", {}).get("rows", [])
-    if new_dealer_table != st.session_state.prev_dealer_table:
-        st.session_state.prev_dealer_table = new_dealer_table
-        st.session_state.filter_dealer = TopDealerDisplayTable.iloc[new_dealer_table]["Tên đối tác"].tolist()
-        st.rerun()
+
     st.divider()
 
     # Raw data transaction log
