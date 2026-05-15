@@ -121,6 +121,31 @@ def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
     
     pk_cols = [c.key for c in mapper.primary_key]
     existing_pk_cols = [c for c in pk_cols if c in df.columns]
+    
+    # Custom business logic: For sale_records, we must sum numeric values for duplicate (order_id, item_id)
+    # This matches the behavior of Excel Pivot tables which the users use for validation.
+    if table_name == "sale_records" and set(pk_cols).issubset(df.columns):
+        numeric_cols = ["sales_volume", "sales_revenue", "cost_of_goods", "total_price_standard"]
+        
+        # Ensure numeric columns are actually numeric to avoid string concatenation during sum
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+                
+        agg_dict = {}
+        for c in df.columns:
+            if c in pk_cols:
+                continue
+            if c in numeric_cols:
+                agg_dict[c] = "sum"
+            elif c == "order_date":
+                agg_dict[c] = "max"
+            else:
+                agg_dict[c] = "first"
+        
+        # Group by PK (which now includes order_id, item_id, date_transfer)
+        df = df.groupby(pk_cols).agg(agg_dict).reset_index()
+
     if existing_pk_cols:
         df = df.dropna(subset=existing_pk_cols)
     

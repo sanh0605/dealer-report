@@ -13,7 +13,7 @@ class SaleRecord(Base):
     order_id              = Column(Text, primary_key=True)
     item_id               = Column(Text, primary_key=True)
     order_date            = Column(DateTime)
-    date_transfer         = Column(Date)
+    date_transfer         = Column(Date, primary_key=True)
     dealer_id             = Column(Text, index=True)
     salesperson           = Column(Text)
     sale_admin            = Column(Text)
