@@ -3,41 +3,34 @@ from unittest.mock import patch, MagicMock
 from components.kpi_cards import render_kpi_row
 
 def test_render_kpi_row_basic():
-    """Test render_kpi_row creates correct number of columns."""
+    """Test render_kpi_row creates correct number of metrics inside a container."""
     metrics = [
         {"label": "Total Revenue", "value": "$100,000"},
         {"label": "Gross Profit", "value": "$40,000"},
     ]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_cols = [MagicMock() for _ in range(2)]
-        mock_st.columns.return_value = mock_cols
-
         render_kpi_row(metrics)
 
-        # Verify st.columns was called with correct number
-        mock_st.columns.assert_called_once_with(2)
+        # Verify st.container was called with horizontal=True
+        mock_st.container.assert_called_once_with(horizontal=True)
 
-        # Verify each column.metric was called
-        mock_cols[0].metric.assert_called_once()
-        mock_cols[1].metric.assert_called_once()
+        # Verify metric was called twice
+        assert mock_st.metric.call_count == 2
 
 def test_render_kpi_row_single_metric():
     """Test render_kpi_row with single metric."""
     metrics = [{"label": "Revenue", "value": "$50,000"}]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_col = MagicMock()
-        mock_st.columns.return_value = [mock_col]
-
         render_kpi_row(metrics)
 
-        mock_st.columns.assert_called_once_with(1)
-        mock_col.metric.assert_called_once_with(
+        mock_st.metric.assert_called_once_with(
             label="Revenue",
             value="$50,000",
             delta=None,
             delta_color="normal",
+            border=True
         )
 
 def test_render_kpi_row_with_delta():
@@ -48,16 +41,15 @@ def test_render_kpi_row_with_delta():
     ]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_cols = [MagicMock() for _ in range(2)]
-        mock_st.columns.return_value = mock_cols
-
         render_kpi_row(metrics)
 
-        mock_cols[0].metric.assert_called_once_with(
+        # Checking the first call
+        mock_st.metric.assert_any_call(
             label="Revenue",
             value="$100,000",
             delta="+10%",
             delta_color="normal",
+            border=True
         )
 
 def test_render_kpi_row_with_delta_color():
@@ -68,22 +60,21 @@ def test_render_kpi_row_with_delta_color():
     ]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_cols = [MagicMock() for _ in range(2)]
-        mock_st.columns.return_value = mock_cols
-
         render_kpi_row(metrics)
 
-        mock_cols[0].metric.assert_called_once_with(
+        mock_st.metric.assert_any_call(
             label="Revenue",
             value="$100,000",
             delta="+10%",
             delta_color="normal",
+            border=True
         )
-        mock_cols[1].metric.assert_called_once_with(
+        mock_st.metric.assert_any_call(
             label="Cost",
             value="$60,000",
             delta="-5%",
             delta_color="inverse",
+            border=True
         )
 
 def test_render_kpi_row_default_delta_color():
@@ -93,25 +84,22 @@ def test_render_kpi_row_default_delta_color():
     ]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_col = MagicMock()
-        mock_st.columns.return_value = [mock_col]
-
         render_kpi_row(metrics)
 
-        mock_col.metric.assert_called_once()
-        call_kwargs = mock_col.metric.call_args[1]
+        mock_st.metric.assert_called_once()
+        call_kwargs = mock_st.metric.call_args[1]
         assert call_kwargs["delta_color"] == "normal"
+        assert call_kwargs["border"] is True
 
 def test_render_kpi_row_empty_metrics():
     """Test render_kpi_row with empty metrics list."""
     metrics = []
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_st.columns.return_value = []
-
         render_kpi_row(metrics)
 
-        mock_st.columns.assert_called_once_with(0)
+        mock_st.container.assert_called_once_with(horizontal=True)
+        assert mock_st.metric.call_count == 0
 
 def test_render_kpi_row_many_metrics():
     """Test render_kpi_row with many metrics (4)."""
@@ -121,11 +109,7 @@ def test_render_kpi_row_many_metrics():
     ]
 
     with patch("components.kpi_cards.st") as mock_st:
-        mock_cols = [MagicMock() for _ in range(4)]
-        mock_st.columns.return_value = mock_cols
-
         render_kpi_row(metrics)
 
-        mock_st.columns.assert_called_once_with(4)
-        for i, col in enumerate(mock_cols):
-            col.metric.assert_called_once()
+        mock_st.container.assert_called_once_with(horizontal=True)
+        assert mock_st.metric.call_count == 4

@@ -149,33 +149,7 @@ try:
         use_container_width=True
     )
 
-    # Charts Row 2
-    Col3, Col4 = st.columns(2)
-    
-    # Sales Frequency Distribution (Histogram of days since last sale or number of sales)
-    # Spec says "Tần suất bán hàng"
-    if not SaleDataFrame.empty:
-        SalesFreq = SaleDataFrame.groupby("dealer_id").size().reset_index(name="Frequency")
-        FilteredFreq = SalesFreq[SalesFreq["dealer_id"].isin(FilteredHealth["dealer_id"])]
-        Col3.plotly_chart(
-            histogram_chart(FilteredFreq, "Frequency", "Tần suất bán hàng (Số đơn hàng)"),
-            use_container_width=True
-        )
-    else:
-        Col3.info("Không có dữ liệu bán hàng để hiển thị tần suất.")
-
-    # Payment Performance (Scatter chart: Payment Score vs Outstanding)
-    Col4.plotly_chart(
-        scatter_chart(
-            FilteredHealth, 
-            x="payment_score", 
-            y="outstanding", 
-            color="status", 
-            title="Hiệu suất thanh toán vs Công nợ",
-            hover_name="dealer_name"
-        ),
-        use_container_width=True
-    )
+    # Charts Row 2 removed as requested
 
     st.divider()
 

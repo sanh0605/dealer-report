@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, User, AuditLog
 from database.seed import seed_users
-from services.user_service import create_user, update_user, delete_user, change_password, get_audit_logs
+from services.identity import create_user, update_user, delete_user, change_password, get_audit_logs
 import bcrypt
 
 @pytest.fixture

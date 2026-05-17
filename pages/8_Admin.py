@@ -4,9 +4,10 @@ import streamlit as st
 import pandas as pd
 from database.session import get_db
 from database.models import User
-from auth.service import require_role
+from services.identity import (
+    require_role, create_user, update_user, delete_user, get_audit_logs
+)
 from services.upload_service import load_file, validate_columns, upsert_dataframe
-from services.user_service import create_user, update_user, delete_user, get_audit_logs
 
 st.set_page_config(page_title="Quản trị", layout="wide")
 

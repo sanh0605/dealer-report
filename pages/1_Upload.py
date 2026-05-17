@@ -5,7 +5,7 @@ Allows uploading CSV/Excel files for various data tables
 import streamlit as st
 import pandas as pd
 import io
-from auth.service import require_role
+from services.identity import require_role
 from database.session import get_db
 from services.upload_service import load_file, validate_columns, upsert_dataframe
 from components.ui_utils import show_centered_loader

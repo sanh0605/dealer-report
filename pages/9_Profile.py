@@ -3,7 +3,7 @@ PageLoader = show_centered_loader()
 import streamlit as st
 from database.session import get_db
 from database.models import User
-from services.user_service import change_password
+from services.identity import change_password
 import bcrypt
 
 st.set_page_config(page_title="Hồ sơ cá nhân", layout="wide")

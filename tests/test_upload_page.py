@@ -31,7 +31,7 @@ class TestUploadPageFileStructure:
         with open("pages/1_Upload.py", "r") as f:
             content = f.read()
             assert "import streamlit as st" in content
-            assert "from auth.service import require_role" in content
+            assert "from services.identity import require_role" in content
             assert "from database.session import get_db" in content
             assert "from services.upload_service import" in content
 

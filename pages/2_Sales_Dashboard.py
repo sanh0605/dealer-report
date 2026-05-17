@@ -93,11 +93,16 @@ try:
             return "others"
         
         ProductDataFrame["brand_group"] = ProductDataFrame.apply(FixBrandGroup, axis=1)
-        MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "brand_group", "brand", "category"]], on="item_id", how="left")
+        MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "brand_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"]], on="item_id", how="left")
     else:
         MainDataFrame["brand_group"] = "others"
         MainDataFrame["brand"] = ""
         MainDataFrame["category"] = ""
+        MainDataFrame["subcategory"] = ""
+        MainDataFrame["model"] = ""
+        MainDataFrame["color"] = ""
+        MainDataFrame["size"] = ""
+        MainDataFrame["item_name"] = ""
 
     MainDataFrame["region"] = MainDataFrame["region"].fillna("Unknown")
     MainDataFrame["brand_group"] = MainDataFrame["brand_group"].fillna("others")
@@ -297,142 +302,343 @@ try:
 
     st.divider()
 
-    ChartCol1, ChartCol2 = st.columns(2)
+    # --- TABS FOR MERGED VIEW ---
+    tab_overview, tab_products, tab_dealers, tab_staff = st.tabs([
+        "📊 Tổng quan", "📦 Phân tích Sản phẩm", "🏢 Đối tác", "👤 Nhân viên"
+    ])
 
-    # Revenue trends visualization
-    MonthlyRevenueTrend = FilteredData.groupby("month_year")["sales_revenue"].sum().reset_index().sort_values("month_year")
-    ChartCol1.plotly_chart(
-        line_chart(MonthlyRevenueTrend, "month_year", "sales_revenue", "Xu hướng doanh thu"),
-        use_container_width=True
-    )
+    with tab_overview:
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True):
+                st.subheader("Xu hướng doanh thu")
+                MonthlyRevenueTrend = FilteredData.groupby("month_year")["sales_revenue"].sum().reset_index().sort_values("month_year")
+                st.plotly_chart(line_chart(MonthlyRevenueTrend, "month_year", "sales_revenue", ""), use_container_width=True)
+                
+        with c2:
+            with st.container(border=True):
+                st.subheader("Doanh số theo Vùng")
+                RegionalCurrentStats = FilteredData.groupby("region").agg(
+                    revenue=("sales_revenue", "sum"),
+                    volume=("sales_volume", "sum"),
+                    dealers=("dealer_id", "nunique")
+                ).reset_index()
 
-    # Geographic breakdown visualization
-    RegionalCurrentStats = FilteredData.groupby("region").agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum"),
-        dealers=("dealer_id", "nunique")
-    ).reset_index()
+                RegionalPreviousRevenue = PreviousFilteredData.groupby("region")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+                RegionalComparisonData = RegionalCurrentStats.merge(RegionalPreviousRevenue, on="region", how="left", suffixes=("", "_prev"))
 
-    RegionalPreviousRevenue = PreviousFilteredData.groupby("region")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
-    RegionalComparisonData = RegionalCurrentStats.merge(RegionalPreviousRevenue, on="region", how="left", suffixes=("", "_prev"))
+                RegionalComparisonData["growth"] = ((RegionalComparisonData["revenue"] - RegionalComparisonData["revenue_prev"]) / RegionalComparisonData["revenue_prev"] * 100).fillna(0)
+                RegionalComparisonData["Tăng trưởng"] = RegionalComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    RegionalComparisonData["growth"] = ((RegionalComparisonData["revenue"] - RegionalComparisonData["revenue_prev"]) / RegionalComparisonData["revenue_prev"] * 100).fillna(0)
-    RegionalComparisonData["Tăng trưởng"] = RegionalComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+                st.plotly_chart(bar_chart(RegionalCurrentStats, "region", "revenue", ""), use_container_width=True)
+                
+                RegionalDisplayTable = RegionalComparisonData[["region", "revenue", "volume", "dealers", "Tăng trưởng"]].copy()
+                RegionalDisplayTable.columns = ["Vùng", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
+                st.dataframe(
+                    RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+                        "Số lượng": st.column_config.NumberColumn(format="%,d"),
+                        "Số đối tác": st.column_config.NumberColumn(format="%,d")
+                    }
+                )
 
-    ChartCol2.plotly_chart(
-        bar_chart(RegionalCurrentStats, "region", "revenue", "Phân vùng kinh doanh"),
-        use_container_width=True
-    )
-    with ChartCol2:
-        RegionalDisplayTable = RegionalComparisonData[["region", "revenue", "volume", "dealers", "Tăng trưởng"]].copy()
-        RegionalDisplayTable.columns = ["Vùng", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
-        st.dataframe(
-            RegionalDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
-                "Số lượng": st.column_config.NumberColumn(format="%,d"),
-                "Số đối tác": st.column_config.NumberColumn(format="%,d")
-            }
-        )
+    with tab_products:
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            with st.container(border=True):
+                st.subheader("Theo Nhóm Thương hiệu")
+                BrandCurrentStats = FilteredData.groupby("brand_group").agg(
+                    revenue=("sales_revenue", "sum"),
+                    volume=("sales_volume", "sum")
+                ).reset_index()
 
-    ChartCol3, ChartCol4 = st.columns(2)
+                BrandPreviousRevenue = PreviousFilteredData.groupby("brand_group")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+                BrandComparisonData = BrandCurrentStats.merge(BrandPreviousRevenue, on="brand_group", how="left", suffixes=("", "_prev"))
 
-    # Brand performance visualization
-    BrandCurrentStats = FilteredData.groupby("brand_group").agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum")
-    ).reset_index()
+                BrandComparisonData["growth"] = ((BrandComparisonData["revenue"] - BrandComparisonData["revenue_prev"]) / BrandComparisonData["revenue_prev"] * 100).fillna(0)
+                BrandComparisonData["Tăng trưởng"] = BrandComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    BrandPreviousRevenue = PreviousFilteredData.groupby("brand_group")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
-    BrandComparisonData = BrandCurrentStats.merge(BrandPreviousRevenue, on="brand_group", how="left", suffixes=("", "_prev"))
+                st.plotly_chart(bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "brand_group", "revenue", ""), use_container_width=True)
+                
+                BrandDisplayTable = BrandComparisonData.sort_values("revenue", ascending=False)
+                BrandDisplayTable = BrandDisplayTable[["brand_group", "revenue", "volume", "Tăng trưởng"]]
+                BrandDisplayTable.columns = ["Nhóm thương hiệu", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+                st.dataframe(
+                    BrandDisplayTable, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+                        "Số lượng": st.column_config.NumberColumn(format="%,d")
+                    }
+                )
+        with c2:
+            with st.container(border=True):
+                st.subheader("Theo Danh mục")
+                
+                # Category stats with comparison
+                CategoryCurrentStats = FilteredData.groupby("category").agg(
+                    revenue=("sales_revenue", "sum"),
+                    volume=("sales_volume", "sum")
+                ).reset_index()
 
-    BrandComparisonData["growth"] = ((BrandComparisonData["revenue"] - BrandComparisonData["revenue_prev"]) / BrandComparisonData["revenue_prev"] * 100).fillna(0)
-    BrandComparisonData["Tăng trưởng"] = BrandComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+                CategoryPreviousRevenue = PreviousFilteredData.groupby("category")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+                CategoryComparisonData = CategoryCurrentStats.merge(CategoryPreviousRevenue, on="category", how="left", suffixes=("", "_prev"))
 
-    ChartCol3.plotly_chart(
-        bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "brand_group", "revenue", "Hiệu suất thương hiệu"),
-        use_container_width=True
-    )
-    with ChartCol3:
-        BrandDisplayTable = BrandComparisonData.sort_values("revenue", ascending=False)
-        BrandDisplayTable = BrandDisplayTable[["brand_group", "revenue", "volume", "Tăng trưởng"]]
-        BrandDisplayTable.columns = ["Nhóm thương hiệu", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
-        st.dataframe(
-            BrandDisplayTable, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
-                "Số lượng": st.column_config.NumberColumn(format="%,d")
-            }
-        )
+                CategoryComparisonData["growth"] = ((CategoryComparisonData["revenue"] - CategoryComparisonData["revenue_prev"]) / CategoryComparisonData["revenue_prev"] * 100).fillna(0)
+                CategoryComparisonData["Tăng trưởng"] = CategoryComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-    # Sales staff performance visualization
-    StaffCurrentStats = FilteredData.groupby("salesperson").agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum"),
-        dealers=("dealer_id", "nunique")
-    ).reset_index()
+                st.plotly_chart(bar_chart(CategoryCurrentStats, "category", "revenue", ""), use_container_width=True)
+                
+                CategoryDisplayTable = CategoryComparisonData[["category", "revenue", "volume", "Tăng trưởng"]].copy()
+                CategoryDisplayTable.columns = ["Danh mục", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+                st.dataframe(
+                    CategoryDisplayTable.sort_values("Doanh số (VND)", ascending=False), 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+                        "Số lượng": st.column_config.NumberColumn(format="%,d")
+                    }
+                )
+        
+        with st.container(border=True):
+            st.subheader("Phân tích SKU & Top Sản phẩm")
+            
+            # --- TOP BIKES (Excel Pivot Compact Form) ---
+            st.markdown("**Bảng tổng hợp Xe (BIKES) - Pivot View**")
+            
+            bikes_data = FilteredData[FilteredData["category"] == "BIKES"].copy()
+            prev_bikes_data = PreviousFilteredData[PreviousFilteredData["category"] == "BIKES"].copy()
+            
+            def render_bikes_pivot_html(b_data, p_data):
+                if b_data.empty:
+                    st.info("Không có dữ liệu Xe.")
+                    return
 
-    StaffPreviousRevenue = PreviousFilteredData.groupby("salesperson")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
-    StaffComparisonData = StaffCurrentStats.merge(StaffPreviousRevenue, on="salesperson", how="left", suffixes=("", "_prev"))
+                # Group by Brand / Model for Summary
+                bikes_summary = b_data.groupby(["brand", "model"]).agg(
+                    revenue=("sales_revenue", "sum"),
+                    volume=("sales_volume", "sum")
+                ).reset_index()
 
-    StaffComparisonData["growth"] = ((StaffComparisonData["revenue"] - StaffComparisonData["revenue_prev"]) / StaffComparisonData["revenue_prev"] * 100).fillna(0)
-    StaffComparisonData["Tăng trưởng"] = StaffComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+                # Get Previous Summary for Growth
+                prev_summary = p_data.groupby(["brand", "model"]).agg(
+                    rev_prev=("sales_revenue", "sum"),
+                    vol_prev=("sales_volume", "sum")
+                ).reset_index()
 
-    ChartCol4.plotly_chart(
-        horizontal_bar_chart(StaffCurrentStats.sort_values("revenue", ascending=True), "revenue", "salesperson", "Hiệu suất nhân viên bán hàng"),
-        use_container_width=True
-    )
-    with ChartCol4:
-        StaffDisplayTable = StaffComparisonData.sort_values("revenue", ascending=False)
-        StaffDisplayTable = StaffDisplayTable[["salesperson", "revenue", "volume", "dealers", "Tăng trưởng"]]
-        StaffDisplayTable.columns = ["Nhân viên", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
-        st.dataframe(
-            StaffDisplayTable, 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={
-                "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
-                "Số lượng": st.column_config.NumberColumn(format="%,d"),
-                "Số đối tác": st.column_config.NumberColumn(format="%,d")
-            }
-        )
+                # Merge and calculate summary growth
+                bikes_summary = bikes_summary.merge(prev_summary, on=["brand", "model"], how="left").fillna(0)
+                bikes_summary["rev_growth"] = ((bikes_summary["revenue"] - bikes_summary["rev_prev"]) / bikes_summary["rev_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+                bikes_summary["vol_growth"] = ((bikes_summary["volume"] - bikes_summary["vol_prev"]) / bikes_summary["vol_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+                
+                bikes_summary = bikes_summary.sort_values("volume", ascending=False).head(20)
 
-    st.divider()
+                html_parts = []
+                html_parts.append('''
+                <style>
+                .grid-table { display: flex; flex-direction: column; width: 100%; font-family: "Source Sans Pro", sans-serif; font-size: 14px; }
+                .grid-row { display: flex; border-bottom: 1px solid #f0f2f6; align-items: center; padding: 12px 0; transition: background-color 0.2s; }
+                .grid-row:hover { background-color: #f8f9fa; }
+                
+                .grid-header { font-weight: 600; color: #6c757d; text-transform: uppercase; font-size: 12px; border-bottom: 1px solid #e6e6e6; padding: 8px 0; }
+                .child-header { font-weight: 600; color: #888; font-size: 11px; background-color: #fafafa; border-bottom: 1px solid #eee; padding: 6px 0; }
+                
+                .c-name { flex: 4.5; text-align: left; padding-left: 10px; font-weight: 600; color: #333; }
+                .c-sku { flex: 2.0; text-align: left; padding-left: 50px; color: #555; font-size: 13px; }
+                .c-color { flex: 1.5; text-align: left; color: #555; font-size: 13px; }
+                .c-size { flex: 1.0; text-align: left; color: #555; font-size: 13px; }
+                
+                .c-rev { flex: 1.5; text-align: right; }
+                .c-rg { flex: 1.0; text-align: right; }
+                .c-vol { flex: 1.0; text-align: right; }
+                .c-vg { flex: 1.0; text-align: right; }
+                .c-tog { flex: 0.5; display: flex; justify-content: flex-end; padding-right: 10px; }
 
-    # Dealer ranking details
-    TopDealerData = FilteredData.groupby(["dealer_id", "dealer_name"]).agg(
-        revenue=("sales_revenue", "sum"),
-        volume=("sales_volume", "sum"),
-        province=("province", "first")
-    ).reset_index().sort_values("revenue", ascending=False).head(10)
+                .toggle-btn { display: none; }
+                .toggle-label { cursor: pointer; border: 1px solid #ccc; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #555; background-color: white; transition: all 0.2s; margin-left: auto; }
+                .toggle-label:hover { border-color: #1f77b4; color: #1f77b4; }
+                .toggle-label::after { content: "＋"; }
+                .toggle-btn:checked ~ .grid-row .toggle-label::after { content: "−"; }
 
-    st.subheader("Top 10 Đối tác theo Doanh số")
-    st.plotly_chart(
-        horizontal_bar_chart(TopDealerData.sort_values("revenue", ascending=True), "revenue", "dealer_name", "Biểu đồ Top 10 Đối tác"),
-        use_container_width=True
-    )
+                .child-container { display: none; flex-direction: column; background-color: #fafafa; border-bottom: 1px solid #f0f2f6; }
+                .toggle-btn:checked ~ .child-container { display: flex; }
 
-    PreviousDealerRevenue = PreviousFilteredData.groupby("dealer_id")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
-    TopDealerData = TopDealerData.merge(PreviousDealerRevenue, on="dealer_id", how="left", suffixes=("", "_prev"))
-    TopDealerData["growth"] = ((TopDealerData["revenue"] - TopDealerData["revenue_prev"]) / TopDealerData["revenue_prev"] * 100).fillna(0)
-    TopDealerData["Tăng trưởng"] = TopDealerData["growth"].map(lambda x: f"{x:+.1f}%")
-    TopDealerData["Hạng"] = range(1, len(TopDealerData) + 1)
+                .child-row { display: flex; align-items: center; padding: 8px 0; border-top: 1px dashed #eee; }
+                
+                .growth-pos { color: #28a745; font-weight: 500; }
+                .growth-neg { color: #dc3545; font-weight: 500; }
+                </style>
+                <div class="grid-table">
+                    <div class="grid-row grid-header">
+                        <div class="c-name">Dòng xe (Brand / Model)</div>
+                        <div class="c-rev">Doanh số</div>
+                        <div class="c-rg">∆ DS</div>
+                        <div class="c-vol">Số lượng</div>
+                        <div class="c-vg">∆ SL</div>
+                        <div class="c-tog"></div>
+                    </div>
+                ''')
 
-    TopDealerDisplayTable = TopDealerData[["Hạng", "dealer_name", "province", "revenue", "volume", "Tăng trưởng"]].copy()
-    TopDealerDisplayTable.columns = ["Hạng", "Tên đối tác", "Tỉnh", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
-    st.dataframe(
-        TopDealerDisplayTable, 
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
-            "Số lượng": st.column_config.NumberColumn(format="%,d")
-        }
-    )
+                for i, row in bikes_summary.iterrows():
+                    brand = row['brand']
+                    model = row['model']
+                    row_key = f"toggle_{i}"
+                    
+                    rg = row['rev_growth']
+                    color_rg = "growth-pos" if rg >= 0 else "growth-neg"
+                    sign_rg = "+" if rg > 0 else ""
+                    
+                    vg = row['vol_growth']
+                    color_vg = "growth-pos" if vg >= 0 else "growth-neg"
+                    sign_vg = "+" if vg > 0 else ""
+
+                    html_parts.append(f'''
+                    <div>
+                        <input type="checkbox" id="{row_key}" class="toggle-btn">
+                        <div class="grid-row">
+                            <div class="c-name">{brand} / {model}</div>
+                            <div class="c-rev" style="font-weight: 500;">₫{row['revenue']:,.0f}</div>
+                            <div class="c-rg {color_rg}">{sign_rg}{rg:.1f}%</div>
+                            <div class="c-vol" style="font-weight: 500;">{row['volume']:,} chiếc</div>
+                            <div class="c-vg {color_vg}">{sign_vg}{vg:.1f}%</div>
+                            <div class="c-tog">
+                                <label for="{row_key}" class="toggle-label"></label>
+                            </div>
+                        </div>
+                        <div class="child-container">
+                            <div class="grid-row child-header">
+                                <div class="c-sku">Mã SKU</div>
+                                <div class="c-color">Màu sắc</div>
+                                <div class="c-size">Kích cỡ</div>
+                                <div class="c-rev">Doanh số</div>
+                                <div class="c-rg">∆ DS</div>
+                                <div class="c-vol">Số lượng</div>
+                                <div class="c-vg">∆ SL</div>
+                                <div class="c-tog"></div>
+                            </div>
+                    ''')
+
+                    # --- CHILD ROWS ---
+                    details = b_data[(b_data["brand"] == brand) & (b_data["model"] == model)].copy()
+                    variant_stats = details.groupby(["item_id", "color", "size"]).agg(
+                        revenue=("sales_revenue", "sum"),
+                        volume=("sales_volume", "sum")
+                    ).reset_index()
+
+                    prev_details = p_data[(p_data["brand"] == brand) & (p_data["model"] == model)]
+                    prev_variant_stats = prev_details.groupby(["item_id", "color", "size"]).agg(
+                        rev_prev=("sales_revenue", "sum"),
+                        vol_prev=("sales_volume", "sum")
+                    ).reset_index()
+
+                    merged_details = variant_stats.merge(prev_variant_stats, on=["item_id", "color", "size"], how="left").fillna(0)
+                    merged_details["rev_growth"] = ((merged_details["revenue"] - merged_details["rev_prev"]) / merged_details["rev_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+                    merged_details["vol_growth"] = ((merged_details["volume"] - merged_details["vol_prev"]) / merged_details["vol_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
+                    merged_details = merged_details.sort_values("volume", ascending=False)
+
+                    for _, c_row in merged_details.iterrows():
+                        crg = c_row['rev_growth']
+                        color_crg = "growth-pos" if crg >= 0 else "growth-neg"
+                        sign_crg = "+" if crg > 0 else ""
+                        
+                        cvg = c_row['vol_growth']
+                        color_cvg = "growth-pos" if cvg >= 0 else "growth-neg"
+                        sign_cvg = "+" if cvg > 0 else ""
+
+                        html_parts.append(f'''
+                            <div class="child-row">
+                                <div class="c-sku">{c_row['item_id']}</div>
+                                <div class="c-color">{c_row['color']}</div>
+                                <div class="c-size">{c_row['size']}</div>
+                                <div class="c-rev">₫{c_row['revenue']:,.0f}</div>
+                                <div class="c-rg {color_crg}">{sign_crg}{crg:.1f}%</div>
+                                <div class="c-vol">{c_row['volume']:,}</div>
+                                <div class="c-vg {color_cvg}">{sign_cvg}{cvg:.1f}%</div>
+                                <div class="c-tog"></div>
+                            </div>
+                        ''')
+                    
+                    html_parts.append('''
+                        </div>
+                    </div>
+                    ''')
+
+                html_parts.append('</div>')
+                
+                final_html = "\n".join([line.strip() for line in "".join(html_parts).split("\n")])
+                st.markdown(final_html, unsafe_allow_html=True)
+
+            # Call the html render function
+            render_bikes_pivot_html(bikes_data, prev_bikes_data)
+
+            st.divider()
+
+            # --- TOP GEARS (Standard Table) ---
+
+    with tab_dealers:
+        with st.container(border=True):
+            st.subheader("Top 10 Đối tác")
+            TopDealerData = FilteredData.groupby(["dealer_id", "dealer_name"]).agg(
+                revenue=("sales_revenue", "sum"),
+                volume=("sales_volume", "sum"),
+                province=("province", "first")
+            ).reset_index().sort_values("revenue", ascending=False).head(10)
+
+            st.plotly_chart(horizontal_bar_chart(TopDealerData.sort_values("revenue", ascending=True), "revenue", "dealer_name", ""), use_container_width=True)
+
+            PreviousDealerRevenue = PreviousFilteredData.groupby("dealer_id")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+            TopDealerData = TopDealerData.merge(PreviousDealerRevenue, on="dealer_id", how="left", suffixes=("", "_prev"))
+            TopDealerData["growth"] = ((TopDealerData["revenue"] - TopDealerData["revenue_prev"]) / TopDealerData["revenue_prev"] * 100).fillna(0)
+            TopDealerData["Tăng trưởng"] = TopDealerData["growth"].map(lambda x: f"{x:+.1f}%")
+            TopDealerData["Hạng"] = range(1, len(TopDealerData) + 1)
+
+            TopDealerDisplayTable = TopDealerData[["Hạng", "dealer_name", "province", "revenue", "volume", "Tăng trưởng"]].copy()
+            TopDealerDisplayTable.columns = ["Hạng", "Tên đối tác", "Tỉnh", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+            st.dataframe(
+                TopDealerDisplayTable, 
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+                    "Số lượng": st.column_config.NumberColumn(format="%,d")
+                }
+            )
+
+    with tab_staff:
+        with st.container(border=True):
+            st.subheader("Hiệu suất Nhân viên")
+            StaffCurrentStats = FilteredData.groupby("salesperson").agg(
+                revenue=("sales_revenue", "sum"),
+                volume=("sales_volume", "sum"),
+                dealers=("dealer_id", "nunique")
+            ).reset_index()
+
+            StaffPreviousRevenue = PreviousFilteredData.groupby("salesperson")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+            StaffComparisonData = StaffCurrentStats.merge(StaffPreviousRevenue, on="salesperson", how="left", suffixes=("", "_prev"))
+
+            StaffComparisonData["growth"] = ((StaffComparisonData["revenue"] - StaffComparisonData["revenue_prev"]) / StaffComparisonData["revenue_prev"] * 100).fillna(0)
+            StaffComparisonData["Tăng trưởng"] = StaffComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
+
+            st.plotly_chart(horizontal_bar_chart(StaffCurrentStats.sort_values("revenue", ascending=True), "revenue", "salesperson", ""), use_container_width=True)
+            
+            StaffDisplayTable = StaffComparisonData.sort_values("revenue", ascending=False)
+            StaffDisplayTable = StaffDisplayTable[["salesperson", "revenue", "volume", "dealers", "Tăng trưởng"]]
+            StaffDisplayTable.columns = ["Nhân viên", "Doanh số (VND)", "Số lượng", "Số đối tác", "Tăng trưởng"]
+            st.dataframe(
+                StaffDisplayTable, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Doanh số (VND)": st.column_config.NumberColumn(format="%,d"),
+                    "Số lượng": st.column_config.NumberColumn(format="%,d"),
+                    "Số đối tác": st.column_config.NumberColumn(format="%,d")
+                }
+            )
 
     st.divider()
 

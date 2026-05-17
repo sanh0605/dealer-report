@@ -1,6 +1,6 @@
 import pytest
 from database.session import init_db, get_db
-from auth.service import login
+from services.identity import login
 from database.models import User
 
 

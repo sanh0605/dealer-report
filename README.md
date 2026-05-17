@@ -39,7 +39,7 @@ The application will be available at `http://localhost:8501`
 
 | Role      | Username   | Password    |
 |-----------|------------|-------------|
-| Admin     | sanh0605   | sanh0605    |
+| Admin     | admin      | admin123    |
 | Manager   | manager     | manager123   |
 | Sales Staff | employee  | employee123  |
 

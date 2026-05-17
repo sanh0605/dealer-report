@@ -22,14 +22,12 @@ def test_required_directories_exist():
 
     required_dirs = [
         "database",
-        "auth",
         "services",
         "components",
         "pages",
         "tests",
         "tests/e2e",
     ]
-
     for dir_name in required_dirs:
         dir_path = project_root / dir_name
         assert dir_path.exists(), f"Required directory {dir_name} does not exist"
@@ -41,12 +39,10 @@ def test_init_files_exist():
 
     init_file_dirs = [
         "database",
-        "auth",
         "services",
         "components",
         "tests",
     ]
-
     for dir_name in init_file_dirs:
         init_path = project_root / dir_name / "__init__.py"
         assert init_path.exists(), f"__init__.py does not exist in {dir_name}"

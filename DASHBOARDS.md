@@ -19,7 +19,8 @@
 - Revenue Trend Chart (Xu hướng doanh thu) - Line chart by month
 - Regional Sales Breakdown (Phân vùng kinh doanh) - Stacked bar chart (Miền Nam/Miền Bắc/Miền Trung)
 - Brand Performance (Hiệu suất thương hiệu) - Pie chart (Giant/Java/OEM/Gears/Others)
-- Top 10 Dealers Chart - Horizontal bar chart
+- Top 10 Dealers by Sales (Top 10 Đối tác theo Doanh số) - Horizontal bar chart
+- Top 10 Dealers by Profit (Top 10 Đối tác theo Lợi nhuận) - Horizontal bar chart
 
 ### **Detailed Tables:**
 - Regional Performance Table: Region | Revenue | Volume | Growth | AR Ratio
@@ -45,8 +46,6 @@
 ### **Main Charts:**
 - Dealer Health Distribution (Phân phối sức khỏe) - Donut chart (Good/Warning/Critical)
 - AR Aging by Dealer (Công nợ theo đối tác) - Stacked bar chart
-- Sales Frequency Distribution (Tần suất bán hàng) - Histogram
-- Payment Performance (Hiệu suất thanh toán) - Scatter chart
 
 ### **Detailed Tables:**
 - Dealer Health Summary Table: Dealer | Province | Health Status | Revenue | AR Days | Payment Score

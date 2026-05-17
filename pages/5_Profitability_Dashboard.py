@@ -47,9 +47,9 @@ try:
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Biên lợi nhuận gộp", f"{margin:.1f}%")
-    c2.metric("Lợi nhuận ròng", f"฿{profit:,.0f}")
-    c3.metric("Tổng doanh thu", f"฿{merged['sales_revenue'].sum():,.0f}")
-    c4.metric("Tổng chi phí", f"฿{merged['cost_of_goods'].sum():,.0f}")
+    c2.metric("Lợi nhuận gộp", f"₫{profit:,.0f}")
+    c3.metric("Tổng doanh thu", f"₫{merged['sales_revenue'].sum():,.0f}")
+    c4.metric("Tổng chi phí", f"₫{merged['cost_of_goods'].sum():,.0f}")
 
     st.divider()
 
@@ -59,8 +59,8 @@ try:
         by_cat = merged.groupby("category").agg(
             revenue=("sales_revenue","sum"),
             cost=("cost_of_goods","sum"),
-            profit=("sales_revenue","sum") - merged.groupby("category")["cost_of_goods"].sum(),
         ).reset_index()
+        by_cat["profit"] = by_cat["revenue"] - by_cat["cost"]
         by_cat["margin_pct"] = (by_cat["profit"] / by_cat["revenue"] * 100).round(1)
 
         with col1:

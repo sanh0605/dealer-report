@@ -191,10 +191,46 @@ def calc_dealer_health_stats(
     }).reset_index()
     
     # New Logic: Recovery Rate = (Paid + Deduction) / (Total - Refund)
-    net_total = dealer_ar["total_order_value"] - dealer_ar["refund_amount"]
-    recovery_total = dealer_ar["paid_amount"] + dealer_ar["deduction_amount"]
+    # Only consider orders that are already due to avoid penalizing future debt in "Health"
+    due_orders = per_order[per_order["due_date"].apply(lambda d: d <= today if pd.notna(d) else False)].copy()
     
-    dealer_ar["payment_score"] = (recovery_total / net_total * 100).fillna(100)
+    if due_orders.empty:
+        # If no orders are due, payment score is 100% (perfect)
+        dealer_ar = per_order.groupby("dealer_id").agg({
+            "total_order_value": "sum",
+            "paid_amount": "sum",
+            "refund_amount": "sum",
+            "deduction_amount": "sum",
+            "outstanding": "sum",
+            "days_overdue": "max" 
+        }).reset_index()
+        dealer_ar["payment_score"] = 100.0
+    else:
+        # Aggregated per dealer for status calculation (using only due orders for score)
+        dealer_due = due_orders.groupby("dealer_id").agg({
+            "total_order_value": "sum",
+            "paid_amount": "sum",
+            "refund_amount": "sum",
+            "deduction_amount": "sum"
+        }).reset_index()
+        
+        net_total = dealer_due["total_order_value"] - dealer_due["refund_amount"]
+        recovery_total = dealer_due["paid_amount"] + dealer_due["deduction_amount"]
+        dealer_due["payment_score"] = (recovery_total / net_total * 100).fillna(100)
+        
+        # Aggregate ALL orders for totals, but join with the payment_score from due orders
+        dealer_totals = per_order.groupby("dealer_id").agg({
+            "total_order_value": "sum",
+            "paid_amount": "sum",
+            "refund_amount": "sum",
+            "deduction_amount": "sum",
+            "outstanding": "sum",
+            "days_overdue": "max"
+        }).reset_index()
+        
+        dealer_ar = dealer_totals.merge(dealer_due[["dealer_id", "payment_score"]], on="dealer_id", how="left")
+        dealer_ar["payment_score"] = dealer_ar["payment_score"].fillna(100.0)
+    
     # Cap score at 100% 
     dealer_ar["payment_score"] = dealer_ar["payment_score"].clip(upper=100)
     

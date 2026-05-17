@@ -142,7 +142,7 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 - **Complexity:** Must include letters, numbers, special characters, uppercase, lowercase
 - **Expiration:** Never expires
 - **History:** Allow reuse of old passwords
-- **Default Admin:** Created on first startup with username: `sanh0605`, password: `sanh0605`
+- **Default Admin:** Created on first startup with username: `admin`, password: `admin123`
 
 ### **Session Management**
 - **Standard Session:** No timeout (stay logged in until logout)
@@ -202,12 +202,12 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 ### **5 Complete Data Dashboards**
 1. **Sales & Revenue Dashboard (Doanh số & Doanh thu)**
    - Overview: Revenue, Volume, Growth, AR Ratio, Average Order Value
-   - Charts: Revenue trend, Regional breakdown, Brand performance, Top 10 dealers
-   - Tables: Regional performance, Dealer ranking, Salesperson performance
+   - Charts: Revenue trend, Regional breakdown, Brand performance, Top 10 dealers by Sales, Top 10 dealers by Profit
+   - Tables: Regional performance, Dealer ranking (Sales & Profit), Salesperson performance
 
 2. **Dealer Health Dashboard (Sức khỏe Đối tác)**
    - Overview: Total, Healthy, At-Risk, New, Inactive dealers
-   - Charts: Health distribution, AR aging, Sales frequency, Payment performance
+   - Charts: Health distribution, AR aging
    - Tables: Health summary, At-risk alerts, New dealers
    - Health Criteria: Good (AR<30, payment>90%), Warning (AR30-60, payment70-90%), Critical (AR>60, payment<70%)
 
@@ -224,9 +224,10 @@ See `DATA_VALIDATION.md` for complete validation rules for all 11 tables.
 
 5. **Profitability Dashboard (Hiệu quả Kinh doanh)**
    - ⚠️ Admin & Manager Only - Not visible to Sales Staff
-   - Overview: Gross margin, Net profit, Profit growth, Average margin, Cost efficiency
+   - Overview: Gross margin, Gross profit (Lợi nhuận gộp), Profit growth, Average margin, Cost efficiency
    - Charts: Profit trend, Margin by product, Profit by dealer, Cost structure
    - Tables: Profitability summary, Dealer profitability, Regional profitability
+   - **Fix Applied:** Corrected invalid tuple subtraction in `agg` function and standardized currency symbols to VND (₫).
 
 ### **Dashboard Features**
 - **Language:** All Vietnamese UI (buttons, labels, charts, messages, tooltips)

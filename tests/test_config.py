@@ -65,7 +65,7 @@ def test_package_directories_exist():
     """Test that all package directories exist with __init__.py files."""
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    packages = ['database', 'auth', 'services', 'components', 'tests']
+    packages = ['database', 'services', 'components', 'tests']
     for package in packages:
         package_path = os.path.join(base_path, package)
         assert os.path.isdir(package_path), f"Directory {package_path} does not exist"

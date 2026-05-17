@@ -4,25 +4,14 @@ from datetime import datetime, date
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.types import Date, DateTime
-from config import REQUIRED_COLUMNS, BRAND_GROUP_MAP, SUB_REGION_TO_REGION
+from config import REQUIRED_COLUMNS
 from database.models import (
     SaleRecord, AccountsReceivableLedger, ProductMaster, DealerMaster,
     SalesTarget, InventoryStatus, IncomingShipment, OpenOrder,
-    FieldVisitPlan,
+    FieldVisitPlan, VisitLog
 )
 
-_TABLE_MODEL_MAP = {
-    "sale_records": SaleRecord,
-    "accounts_receivable_ledger": AccountsReceivableLedger,
-    "product_master": ProductMaster,
-    "dealer_master": DealerMaster,
-    "sales_targets": SalesTarget,
-    "inventory_status": InventoryStatus,
-    "incoming_shipments": IncomingShipment,
-    "open_orders": OpenOrder,
-    "field_visit_plans": FieldVisitPlan,
-}
-
+# --- File Utilities ---
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     clean_cols = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
@@ -48,93 +37,79 @@ def load_file(file_bytes: bytes, filename: str) -> pd.DataFrame:
         df = pd.read_excel(buf, dtype=str)
     return normalize_columns(df)
 
-
 def validate_columns(df: pd.DataFrame, table_name: str) -> list[str]:
     required = REQUIRED_COLUMNS.get(table_name, [])
     return [c for c in required if c not in df.columns]
 
+# --- Ingestion Framework ---
 
-def _convert_date_columns(df: pd.DataFrame, model) -> pd.DataFrame:
-    df = df.copy()
-    for col in df.columns:
-        if col not in model.__mapper__.columns:
-            continue
-        col_type = model.__mapper__.columns[col].type
-        if isinstance(col_type, (Date, DateTime)):
-            df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
-            if isinstance(col_type, Date):
-                df[col] = df[col].dt.date
-    return df
+class BaseIngestor:
+    def __init__(self, db: Session, model):
+        self.db = db
+        self.model = model
+        self.mapper = model.__mapper__
+        self.cols = {c.key for c in self.mapper.columns}
+        self.pk_cols = [c.key for c in self.mapper.primary_key]
 
+    def _convert_dates(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        for col in df.columns:
+            if col not in self.cols:
+                continue
+            col_type = self.mapper.columns[col].type
+            if isinstance(col_type, (Date, DateTime)):
+                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+                if isinstance(col_type, Date):
+                    df[col] = df[col].dt.date
+        return df
 
-def _apply_auto_assignments(df: pd.DataFrame, table_name: str) -> pd.DataFrame:
-    df = df.copy()
-    if table_name == "product_master":
-        def get_brand_group(row):
-            cat = str(row.get("category", "")).strip().lower()
-            brand = str(row.get("brand", "")).strip().lower()
-            subcat = str(row.get("subcategory", "")).strip().lower()
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Override to add custom business logic before upsert"""
+        return df
+
+    def process(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.transform(df)
+        df = self._convert_dates(df)
+        # Filter to model columns
+        df = df[[c for c in df.columns if c in self.cols]]
+        # Drop rows missing PK
+        existing_pk_cols = [c for c in self.pk_cols if c in df.columns]
+        if existing_pk_cols:
+            df = df.dropna(subset=existing_pk_cols)
+        return df
+
+    def upsert(self, df: pd.DataFrame) -> int:
+        df = self.process(df)
+        df = df.where(pd.notna(df), None)
+        records = df.to_dict(orient="records")
+        if not records:
+            return 0
             
-            if cat == "gears":
-                return "gears"
+        chunk_size = 50
+        for i in range(0, len(records), chunk_size):
+            chunk = records[i:i + chunk_size]
+            stmt = sqlite_insert(self.model.__table__).values(chunk)
+            update_cols = {c: stmt.excluded[c] for c in df.columns if c not in self.pk_cols}
+            if update_cols:
+                stmt = stmt.on_conflict_do_update(index_elements=self.pk_cols, set_=update_cols)
+            else:
+                stmt = stmt.on_conflict_do_nothing(index_elements=self.pk_cols)
+            self.db.execute(stmt)
             
-            if cat == "bikes":
-                # Priority 1: E-Bikes/Scooters are always Others
-                if any(x in subcat for x in ["e-bikes", "e-scooters"]):
-                    return "others"
-                # Priority 2: Jeep/Hitasa are always Others
-                if any(x in brand for x in ["jeep", "hitasa"]):
-                    return "others"
-                # Priority 3: Giant Group
-                if any(x in brand for x in ["giant", "liv", "momentum"]):
-                    return "giant bikes"
-                # Priority 4: Java
-                if "java" in brand:
-                    return "java bikes"
-                # Priority 5: OEM
-                return "oem bikes"
-            
-            return "others"
-        
-        df["brand_group"] = df.apply(get_brand_group, axis=1)
-        
-    if table_name == "dealer_master" and "sub_region" in df.columns:
-        def get_region(sub_reg):
-            sr = str(sub_reg).upper()
-            if "MN" in sr: return "Miền Nam"
-            if "MB" in sr: return "Miền Bắc"
-            if "MT" in sr: return "Miền Trung"
-            return "Unknown"
-        
-        df["region"] = df["sub_region"].apply(get_region)
-        
-    return df
+        self.db.commit()
+        return len(records)
 
-
-def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
-    model = _TABLE_MODEL_MAP[table_name]
-    df = _apply_auto_assignments(df, table_name)
-    df = _convert_date_columns(df, model)
-    mapper = model.__mapper__
-    cols = {c.key for c in mapper.columns}
-    df = df[[c for c in df.columns if c in cols]]
-    
-    pk_cols = [c.key for c in mapper.primary_key]
-    existing_pk_cols = [c for c in pk_cols if c in df.columns]
-    
-    # Custom business logic: For sale_records, we must sum numeric values for duplicate (order_id, item_id)
-    # This matches the behavior of Excel Pivot tables which the users use for validation.
-    if table_name == "sale_records" and set(pk_cols).issubset(df.columns):
+class SalesIngestor(BaseIngestor):
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         numeric_cols = ["sales_volume", "sales_revenue", "cost_of_goods", "total_price_standard"]
-        
-        # Ensure numeric columns are actually numeric to avoid string concatenation during sum
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-                
+        
+        # Aggregation logic for sale_records
         agg_dict = {}
         for c in df.columns:
-            if c in pk_cols:
+            if c in self.pk_cols:
                 continue
             if c in numeric_cols:
                 agg_dict[c] = "sum"
@@ -143,28 +118,60 @@ def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
             else:
                 agg_dict[c] = "first"
         
-        # Group by PK (which now includes order_id, item_id, date_transfer)
-        df = df.groupby(pk_cols).agg(agg_dict).reset_index()
+        return df.groupby(self.pk_cols).agg(agg_dict).reset_index()
 
-    if existing_pk_cols:
-        df = df.dropna(subset=existing_pk_cols)
-    
-    df = df.where(pd.notna(df), None)
-    records = df.to_dict(orient="records")
-    if not records:
-        return 0
+class ProductIngestor(BaseIngestor):
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        def get_brand_group(row):
+            cat = str(row.get("category", "")).strip().lower()
+            brand = str(row.get("brand", "")).strip().lower()
+            subcat = str(row.get("subcategory", "")).strip().lower()
+            if cat == "gears": return "gears"
+            if cat == "bikes":
+                if any(x in subcat for x in ["e-bikes", "e-scooters"]): return "others"
+                if any(x in brand for x in ["jeep", "hitasa"]): return "others"
+                if any(x in brand for x in ["giant", "liv", "momentum"]): return "giant bikes"
+                if "java" in brand: return "java bikes"
+                return "oem bikes"
+            return "others"
         
-    chunk_size = 50
-    
-    for i in range(0, len(records), chunk_size):
-        chunk = records[i:i + chunk_size]
-        stmt = sqlite_insert(model.__table__).values(chunk)
-        update_cols = {c: stmt.excluded[c] for c in df.columns if c not in pk_cols}
-        if update_cols:
-            stmt = stmt.on_conflict_do_update(index_elements=pk_cols, set_=update_cols)
-        else:
-            stmt = stmt.on_conflict_do_nothing(index_elements=pk_cols)
-        db.execute(stmt)
+        df = df.copy()
+        df["brand_group"] = df.apply(get_brand_group, axis=1)
+        return df
+
+class DealerIngestor(BaseIngestor):
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        def get_region(sub_reg):
+            sr = str(sub_reg).upper()
+            if "MN" in sr: return "Miền Nam"
+            if "MB" in sr: return "Miền Bắc"
+            if "MT" in sr: return "Miền Trung"
+            return "Unknown"
         
-    db.commit()
-    return len(records)
+        if "sub_region" in df.columns:
+            df = df.copy()
+            df["region"] = df["sub_region"].apply(get_region)
+        return df
+
+# --- Ingestion Registry ---
+
+_INGESTOR_MAP = {
+    "sale_records": (SaleRecord, SalesIngestor),
+    "product_master": (ProductMaster, ProductIngestor),
+    "dealer_master": (DealerMaster, DealerIngestor),
+    "accounts_receivable_ledger": (AccountsReceivableLedger, BaseIngestor),
+    "sales_targets": (SalesTarget, BaseIngestor),
+    "inventory_status": (InventoryStatus, BaseIngestor),
+    "incoming_shipments": (IncomingShipment, BaseIngestor),
+    "open_orders": (OpenOrder, BaseIngestor),
+    "field_visit_plans": (FieldVisitPlan, BaseIngestor),
+    "visit_logs": (VisitLog, BaseIngestor),
+}
+
+def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
+    if table_name not in _INGESTOR_MAP:
+        raise ValueError(f"No ingestor registered for table: {table_name}")
+    
+    model_class, ingestor_class = _INGESTOR_MAP[table_name]
+    ingestor = ingestor_class(db, model_class)
+    return ingestor.upsert(df)

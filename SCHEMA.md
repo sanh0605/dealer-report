@@ -187,7 +187,7 @@
 | `last_login` | DateTime | Last successful login timestamp (for display). |
 
 > **Default Users (created by seed.py):**
-> - Admin: username="sanh0605", password="sanh0605", role="Admin"
+> - Admin: username="admin", password="admin123", role="Admin"
 > - Manager: username="manager", password="manager123", role="Manager"  
 > - Sales Staff: username="employee", password="employee123", role="Sales Staff"
 

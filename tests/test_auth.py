@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, User
 from database.seed import seed_users
-from auth.service import login, require_role
+from services.identity import login, require_role
 
 @pytest.fixture
 def db():
