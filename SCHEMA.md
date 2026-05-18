@@ -274,7 +274,7 @@ See Dealer Master Table above for complete logic.
 - **Business Tables (11):** sale_records, accounts_receivable_ledger, product_master, dealer_master, sales_targets, inventory_status, incoming_shipments, open_orders, lost_sales_entry, field_visit_plans, visit_logs
 - **System Tables (2):** users, audit_logs
 
-**Auto-Calculated Fields:** `brand_group` (product_master), `region` (dealer_master), `lost_revenue` (lost_sales_entry)
+**Auto-Calculated Fields:** `product_group` (product_master), `region` (dealer_master), `lost_revenue` (lost_sales_entry)
 **Auto-Generated IDs:** All id fields across 13 tables
 **Foreign Key Relationships:** visit_logs.plan_id → field_visit_plans.plan_id (optional)
 **Region Standardization:** All region fields use exact values: Miền Bắc, Miền Trung, Miền Nam

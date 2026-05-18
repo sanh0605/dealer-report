@@ -9,7 +9,7 @@ AR_BUCKET_SIZE = 30  # days per bucket
 AR_MAX_DAYS = 180     # maximum days to display
 
 
-BRAND_GROUP_MAP: dict[str, str] = {
+PRODUCT_GROUP_MAP: dict[str, str] = {
     # Populate with actual brand names before first upload
     # Example: "Trek": "Premium Bikes", "Shimano": "Components"
 }

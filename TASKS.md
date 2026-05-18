@@ -62,4 +62,4 @@
 1. Upload sample data for `sale_records`
 2. Add missing data files (sales_targets, visit_logs, etc.)
 3. Test dashboards with real data
-4. Configure brand_group_map and sub_region_to_region in `config.py`
+4. Configure product_group_map and sub_region_to_region in `config.py`

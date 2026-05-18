@@ -4,7 +4,7 @@ import io
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from config import REQUIRED_COLUMNS, BRAND_GROUP_MAP, SUB_REGION_TO_REGION
+from config import REQUIRED_COLUMNS, PRODUCT_GROUP_MAP, SUB_REGION_TO_REGION
 from database.models import (
     SaleRecord, AccountsReceivableLedger, ProductMaster, DealerMaster,
     SalesTarget, InventoryStatus, IncomingShipment, OpenOrder,

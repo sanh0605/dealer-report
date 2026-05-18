@@ -39,10 +39,11 @@ try:
 
     if not SalesRows:
         st.info("Không có dữ liệu bán hàng. Vui lòng tải dữ liệu lên qua trang Upload.")
+        PageLoader.empty()
         st.stop()
 
     MainDataFrame = pd.DataFrame([r.__dict__ for r in SalesRows]).drop(columns=["_sa_instance_state"], errors="ignore")
-    MainDataFrame["date_transfer"] = pd.to_datetime(MainDataFrame["date_transfer"], dayfirst=True, errors="coerce")
+    MainDataFrame["date_transfer"] = pd.to_datetime(MainDataFrame["date_transfer"], format="mixed", errors="coerce")
     MainDataFrame["month_year"] = MainDataFrame["date_transfer"].dt.strftime("%m/%Y")
     MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]] = (
         MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]].apply(pd.to_numeric, errors="coerce")
@@ -77,25 +78,27 @@ try:
         ProductDataFrame["item_id"] = ProductDataFrame["item_id"].str.strip()
         MainDataFrame["item_id"] = MainDataFrame["item_id"].str.strip()
         
-        def FixBrandGroup(row):
-            """Apply custom business rules for brand categorization"""
+        def FixProductGroup(row):
+            """Apply custom business rules for product categorization"""
             Category = str(row.get("category", "")).strip().lower()
             BrandName = str(row.get("brand", "")).strip().lower()
             SubCategory = str(row.get("subcategory", "")).strip().lower()
             
-            if Category == "gears": return "gears"
+            if Category == "gears":
+                if BrandName == "maxxis": return "maxxis"
+                return "gears"
             if Category == "bikes":
                 if any(x in SubCategory for x in ["e-bikes", "e-scooters"]): return "others"
-                if any(x in BrandName for x in ["jeep", "hitasa"]): return "others"
+                if any(x in BrandName for x in ["jeep", "hitasa"]): return "oem bikes"
                 if any(x in BrandName for x in ["giant", "liv", "momentum"]): return "giant bikes"
                 if "java" in BrandName: return "java bikes"
                 return "oem bikes"
             return "others"
         
-        ProductDataFrame["brand_group"] = ProductDataFrame.apply(FixBrandGroup, axis=1)
-        MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "brand_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"]], on="item_id", how="left")
+        ProductDataFrame["product_group"] = ProductDataFrame.apply(FixProductGroup, axis=1)
+        MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "product_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"]], on="item_id", how="left")
     else:
-        MainDataFrame["brand_group"] = "others"
+        MainDataFrame["product_group"] = "others"
         MainDataFrame["brand"] = ""
         MainDataFrame["category"] = ""
         MainDataFrame["subcategory"] = ""
@@ -105,16 +108,17 @@ try:
         MainDataFrame["item_name"] = ""
 
     MainDataFrame["region"] = MainDataFrame["region"].fillna("Unknown")
-    MainDataFrame["brand_group"] = MainDataFrame["brand_group"].fillna("others")
+    MainDataFrame["product_group"] = MainDataFrame["product_group"].fillna("others")
 
-    BrandLabelMap = {
+    ProductGroupLabelMap = {
         "gears": "Phụ kiện",
+        "maxxis": "Maxxis",
         "giant bikes": "Xe Giant",
         "java bikes": "Xe Java",
         "oem bikes": "Xe OEM",
         "others": "Khác"
     }
-    MainDataFrame["brand_group"] = MainDataFrame["brand_group"].map(BrandLabelMap).fillna("Khác")
+    MainDataFrame["product_group"] = MainDataFrame["product_group"].map(ProductGroupLabelMap).fillna("Khác")
 
     st.sidebar.header("Bộ lọc")
 
@@ -134,8 +138,8 @@ try:
     RegionList = sorted(MainDataFrame["region"].dropna().unique().tolist())
     SelectedRegion = st.sidebar.multiselect("Vùng miền", RegionList)
 
-    BrandGroupList = sorted(MainDataFrame["brand_group"].dropna().unique().tolist())
-    SelectedBrand = st.sidebar.multiselect("Nhóm thương hiệu", BrandGroupList)
+    ProductGroupList = sorted(MainDataFrame["product_group"].dropna().unique().tolist())
+    SelectedBrand = st.sidebar.multiselect("Nhóm sản phẩm", ProductGroupList)
 
     SalespersonList = sorted(MainDataFrame["salesperson"].dropna().unique().tolist())
     SelectedSalesperson = st.sidebar.multiselect("Nhân viên bán hàng", SalespersonList)
@@ -203,8 +207,8 @@ try:
         FilteredData = FilteredData[FilteredData["region"].isin(SelectedRegion)]
         PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["region"].isin(SelectedRegion)]
     if SelectedBrand:
-        FilteredData = FilteredData[FilteredData["brand_group"].isin(SelectedBrand)]
-        PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["brand_group"].isin(SelectedBrand)]
+        FilteredData = FilteredData[FilteredData["product_group"].isin(SelectedBrand)]
+        PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["product_group"].isin(SelectedBrand)]
     if SelectedSalesperson:
         FilteredData = FilteredData[FilteredData["salesperson"].isin(SelectedSalesperson)]
         PreviousFilteredData = PreviousFilteredData[PreviousFilteredData["salesperson"].isin(SelectedSalesperson)]
@@ -303,8 +307,8 @@ try:
     st.divider()
 
     # --- TABS FOR MERGED VIEW ---
-    tab_overview, tab_products, tab_dealers, tab_staff = st.tabs([
-        "📊 Tổng quan", "📦 Phân tích Sản phẩm", "🏢 Đối tác", "👤 Nhân viên"
+    tab_overview, tab_products, tab_dealers, tab_staff, tab_profit = st.tabs([
+        "📊 Tổng quan", "📦 Phân tích Sản phẩm", "🏢 Đối tác", "👤 Nhân viên", "💰 Hiệu quả KD"
     ])
 
     with tab_overview:
@@ -350,22 +354,22 @@ try:
         with c1:
             with st.container(border=True):
                 st.subheader("Theo Nhóm Thương hiệu")
-                BrandCurrentStats = FilteredData.groupby("brand_group").agg(
+                BrandCurrentStats = FilteredData.groupby("product_group").agg(
                     revenue=("sales_revenue", "sum"),
                     volume=("sales_volume", "sum")
                 ).reset_index()
 
-                BrandPreviousRevenue = PreviousFilteredData.groupby("brand_group")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
-                BrandComparisonData = BrandCurrentStats.merge(BrandPreviousRevenue, on="brand_group", how="left", suffixes=("", "_prev"))
+                BrandPreviousRevenue = PreviousFilteredData.groupby("product_group")["sales_revenue"].sum().reset_index().rename(columns={"sales_revenue": "revenue"})
+                BrandComparisonData = BrandCurrentStats.merge(BrandPreviousRevenue, on="product_group", how="left", suffixes=("", "_prev"))
 
                 BrandComparisonData["growth"] = ((BrandComparisonData["revenue"] - BrandComparisonData["revenue_prev"]) / BrandComparisonData["revenue_prev"] * 100).fillna(0)
                 BrandComparisonData["Tăng trưởng"] = BrandComparisonData["growth"].map(lambda x: f"{x:+.1f}%")
 
-                st.plotly_chart(bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "brand_group", "revenue", ""), use_container_width=True)
+                st.plotly_chart(bar_chart(BrandCurrentStats.sort_values("revenue", ascending=False), "product_group", "revenue", ""), use_container_width=True)
                 
                 BrandDisplayTable = BrandComparisonData.sort_values("revenue", ascending=False)
-                BrandDisplayTable = BrandDisplayTable[["brand_group", "revenue", "volume", "Tăng trưởng"]]
-                BrandDisplayTable.columns = ["Nhóm thương hiệu", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
+                BrandDisplayTable = BrandDisplayTable[["product_group", "revenue", "volume", "Tăng trưởng"]]
+                BrandDisplayTable.columns = ["Nhóm sản phẩm", "Doanh số (VND)", "Số lượng", "Tăng trưởng"]
                 st.dataframe(
                     BrandDisplayTable, 
                     use_container_width=True, 
@@ -436,7 +440,7 @@ try:
                 bikes_summary["rev_growth"] = ((bikes_summary["revenue"] - bikes_summary["rev_prev"]) / bikes_summary["rev_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
                 bikes_summary["vol_growth"] = ((bikes_summary["volume"] - bikes_summary["vol_prev"]) / bikes_summary["vol_prev"] * 100).replace([float('inf'), -float('inf')], 0).fillna(0)
                 
-                bikes_summary = bikes_summary.sort_values("volume", ascending=False).head(20)
+                bikes_summary = bikes_summary.sort_values("volume", ascending=False)
 
                 html_parts = []
                 html_parts.append('''
@@ -445,7 +449,7 @@ try:
                 .grid-row { display: flex; border-bottom: 1px solid #f0f2f6; align-items: center; padding: 12px 0; transition: background-color 0.2s; }
                 .grid-row:hover { background-color: #f8f9fa; }
                 
-                .grid-header { font-weight: 600; color: #6c757d; text-transform: uppercase; font-size: 12px; border-bottom: 1px solid #e6e6e6; padding: 8px 0; }
+                .grid-header { position: sticky; top: 0; background-color: white; z-index: 10; font-weight: 600; color: #6c757d; text-transform: uppercase; font-size: 12px; border-bottom: 2px solid #e6e6e6; padding: 8px 0; margin-top: 0; }
                 .child-header { font-weight: 600; color: #888; font-size: 11px; background-color: #fafafa; border-bottom: 1px solid #eee; padding: 6px 0; }
                 
                 .c-name { flex: 4.5; text-align: left; padding-left: 10px; font-weight: 600; color: #333; }
@@ -472,9 +476,16 @@ try:
                 
                 .growth-pos { color: #28a745; font-weight: 500; }
                 .growth-neg { color: #dc3545; font-weight: 500; }
+                
+                /* Custom Scrollbar for Webkit */
+                .scroll-container::-webkit-scrollbar { width: 8px; }
+                .scroll-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+                .scroll-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+                .scroll-container::-webkit-scrollbar-thumb:hover { background: #aaa; }
                 </style>
-                <div class="grid-table">
-                    <div class="grid-row grid-header">
+                <div class="scroll-container" style="max-height: 480px; overflow-y: auto; border: 1px solid #e6e6e6; border-radius: 4px;">
+                    <div class="grid-table">
+                        <div class="grid-row grid-header">
                         <div class="c-name">Dòng xe (Brand / Model)</div>
                         <div class="c-rev">Doanh số</div>
                         <div class="c-rg">∆ DS</div>
@@ -569,6 +580,7 @@ try:
                     ''')
 
                 html_parts.append('</div>')
+                html_parts.append('</div>') # Close scroll-container
                 
                 final_html = "\n".join([line.strip() for line in "".join(html_parts).split("\n")])
                 st.markdown(final_html, unsafe_allow_html=True)
@@ -640,15 +652,68 @@ try:
                 }
             )
 
+    with tab_profit:
+        if CurrentUser["role"] not in ["Admin", "Manager"]:
+            st.warning("Bạn không có quyền truy cập dữ liệu Hiệu quả Kinh doanh (Yêu cầu quyền Admin hoặc Manager).")
+        else:
+            with st.container(border=True):
+                st.subheader("Hiệu quả Kinh doanh (Lợi nhuận & Biên lợi nhuận)")
+                profit, margin = calc_gross_profit(FilteredData)
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Biên lợi nhuận gộp", f"{margin:.1f}%")
+                c2.metric("Lợi nhuận gộp", f"₫{profit:,.0f}")
+                c3.metric("Tổng doanh thu", f"₫{FilteredData['sales_revenue'].sum():,.0f}")
+                c4.metric("Tổng chi phí", f"₫{FilteredData['cost_of_goods'].sum():,.0f}")
+
+                st.divider()
+
+                if "category" in FilteredData.columns:
+                    col1, col2 = st.columns(2)
+
+                    by_cat = FilteredData.groupby("category").agg(
+                        revenue=("sales_revenue", "sum"),
+                        cost=("cost_of_goods", "sum"),
+                    ).reset_index()
+                    by_cat["profit"] = by_cat["revenue"] - by_cat["cost"]
+                    # Prevent division by zero
+                    by_cat["margin_pct"] = by_cat.apply(lambda row: (row["profit"] / row["revenue"] * 100) if row["revenue"] > 0 else 0, axis=1).round(1)
+
+                    with col1:
+                        st.plotly_chart(bar_chart(by_cat, "category", "profit", "Lợi nhuận theo Danh mục"), use_container_width=True)
+
+                    with col2:
+                        # Pie chart doesn't accept negative values well, so filter out negative profit for pie chart if necessary, or just render it. Plotly handles it okay-ish, but let's be safe.
+                        pie_data = by_cat[by_cat["profit"] > 0]
+                        if not pie_data.empty:
+                            st.plotly_chart(pie_chart(pie_data, "category", "profit", "Phân bổ Lợi nhuận theo Danh mục"), use_container_width=True)
+                        else:
+                            st.info("Không có dữ liệu lợi nhuận dương để vẽ biểu đồ tròn.")
+
+                    st.markdown("**Bảng chi tiết Lợi nhuận**")
+                    display_df = by_cat[["category","revenue","cost","profit","margin_pct"]].sort_values("profit", ascending=False).copy()
+                    display_df.columns = ["Danh mục","Doanh thu","Chi phí","Lợi nhuận","Biên lợi nhuận (%)"]
+                    st.dataframe(
+                        display_df, 
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Doanh thu": st.column_config.NumberColumn(format="₫%,d"),
+                            "Chi phí": st.column_config.NumberColumn(format="₫%,d"),
+                            "Lợi nhuận": st.column_config.NumberColumn(format="₫%,d"),
+                            "Biên lợi nhuận (%)": st.column_config.NumberColumn(format="%.1f%%")
+                        }
+                    )
+
     st.divider()
 
     # Raw data transaction log
     with st.expander("Xem dữ liệu gốc"):
         RawColumnSelection = ["order_id", "date_transfer", "dealer_id", "dealer_name", "salesperson",
-                    "channel_name", "brand_group", "sales_volume", "sales_revenue"]
+                    "channel_name", "product_group", "sales_volume", "sales_revenue"]
         RawTransactionLog = FilteredData[RawColumnSelection].copy()
         RawTransactionLog.columns = ["Mã đơn hàng", "Ngày chuyển", "Mã đối tác", "Tên đối tác",
-                          "Nhân viên", "Kênh", "Nhóm thương hiệu", "Số lượng", "Doanh số"]
+                          "Nhân viên", "Kênh", "Nhóm sản phẩm", "Số lượng", "Doanh số"]
         st.dataframe(
             RawTransactionLog.reset_index(drop=True), 
             use_container_width=True,

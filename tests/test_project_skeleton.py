@@ -49,13 +49,13 @@ def test_init_files_exist():
 
 def test_config_constants():
     """Test that config.py has required constants."""
-    from config import ROLES, BRAND_GROUP_MAP, SUB_REGION_TO_REGION, REQUIRED_COLUMNS
+    from config import ROLES, PRODUCT_GROUP_MAP, SUB_REGION_TO_REGION, REQUIRED_COLUMNS
 
     assert isinstance(ROLES, list), "ROLES should be a list"
     assert len(ROLES) == 3, "ROLES should have 3 elements"
     assert "Admin" in ROLES, "Admin role should be in ROLES"
 
-    assert isinstance(BRAND_GROUP_MAP, dict), "BRAND_GROUP_MAP should be a dict"
+    assert isinstance(PRODUCT_GROUP_MAP, dict), "PRODUCT_GROUP_MAP should be a dict"
     assert isinstance(SUB_REGION_TO_REGION, dict), "SUB_REGION_TO_REGION should be a dict"
     assert isinstance(REQUIRED_COLUMNS, dict), "REQUIRED_COLUMNS should be a dict"
 

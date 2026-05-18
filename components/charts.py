@@ -24,10 +24,10 @@ def _format_axis_data(df: pd.DataFrame, col: str) -> tuple[pd.DataFrame, str, st
 def bar_chart(df: pd.DataFrame, x: str, y: str, title: str) -> go.Figure:
     if x == "region":
         x_label = "Miền"
-    elif x == "brand_group_label":
-        x_label = "Nhóm thương hiệu"
-    elif x == "brand_group":
-        x_label = "Nhóm thương hiệu"
+    elif x == "product_group_label":
+        x_label = "Nhóm sản phẩm"
+    elif x == "product_group":
+        x_label = "Nhóm sản phẩm"
     elif x == "salesperson":
         x_label = "Nhân viên"
     else:

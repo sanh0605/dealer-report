@@ -16,7 +16,7 @@
 
 ### **SCHEMA.md**
 - **Purpose:** Database schema and structure reference
-- **Content:** All 11 database tables with field descriptions, auto-assignment logic (brand_group, region)
+- **Content:** All 11 database tables with field descriptions, auto-assignment logic (product_group, region)
 - **Usage:** Reference for understanding data structure and relationships
 - **Note:** For business logic and system configuration, see [MASTER_DECISIONS.md](MASTER_DECISIONS.md)
 - **Last Updated:** 2026-05-08

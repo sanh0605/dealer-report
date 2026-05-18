@@ -21,6 +21,7 @@ try:
         require_role(type("U", (), user_state)(), ["Admin"])
     except PermissionError:
         st.error("Chỉ Admin mới có quyền truy cập trang này.")
+        PageLoader.empty()
         st.stop()
 
     st.title("⚙️ Bảng điều khiển Quản trị")

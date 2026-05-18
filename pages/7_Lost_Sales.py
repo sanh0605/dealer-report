@@ -11,6 +11,7 @@ st.set_page_config(page_title="Bán mất", layout="wide")
 try:
     if "user" not in st.session_state:
         st.error("Vui lòng đăng nhập từ trang chủ.")
+        PageLoader.empty()
         st.stop()
 
     user = st.session_state["user"]
@@ -36,7 +37,7 @@ try:
         if sale_df.empty:
             return 0.0
 
-        sale_df["order_date"] = pd.to_datetime(sale_df["order_date"], dayfirst=True, errors="coerce")
+        sale_df["order_date"] = pd.to_datetime(sale_df["order_date"], format="mixed", errors="coerce")
         three_months_ago = date.today() - timedelta(days=90)
         recent_sales = sale_df[sale_df["order_date"] >= three_months_ago]
 

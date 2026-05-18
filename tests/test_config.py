@@ -22,11 +22,11 @@ def test_roles_defined():
     assert "Sales Staff" in config.ROLES
 
 
-def test_brand_group_map_defined():
-    """Test that BRAND_GROUP_MAP constant is defined."""
+def test_product_group_map_defined():
+    """Test that PRODUCT_GROUP_MAP constant is defined."""
     import config
-    assert hasattr(config, 'BRAND_GROUP_MAP')
-    assert isinstance(config.BRAND_GROUP_MAP, dict)
+    assert hasattr(config, 'PRODUCT_GROUP_MAP')
+    assert isinstance(config.PRODUCT_GROUP_MAP, dict)
 
 
 def test_sub_region_to_region_defined():

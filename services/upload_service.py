@@ -58,7 +58,7 @@ class BaseIngestor:
                 continue
             col_type = self.mapper.columns[col].type
             if isinstance(col_type, (Date, DateTime)):
-                df[col] = pd.to_datetime(df[col], dayfirst=True, errors="coerce")
+                df[col] = pd.to_datetime(df[col], format="mixed", errors="coerce")
                 if isinstance(col_type, Date):
                     df[col] = df[col].dt.date
         return df
@@ -80,7 +80,10 @@ class BaseIngestor:
 
     def upsert(self, df: pd.DataFrame) -> int:
         df = self.process(df)
-        df = df.where(pd.notna(df), None)
+        
+        # Safely replace all NaNs with None for SQLAlchemy
+        df = df.astype(object).where(pd.notna(df), None)
+        
         records = df.to_dict(orient="records")
         if not records:
             return 0
@@ -101,10 +104,13 @@ class BaseIngestor:
 
 class SalesIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        numeric_cols = ["sales_volume", "sales_revenue", "cost_of_goods", "total_price_standard"]
+        numeric_cols = ["sales_volume", "sales_revenue", "cost_of_goods", "total_price_standard", "unit_price_standard"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+        
+        if "sales_volume" in df.columns:
+            df["sales_volume"] = df["sales_volume"].astype(int)
         
         # Aggregation logic for sale_records
         agg_dict = {}
@@ -122,21 +128,23 @@ class SalesIngestor(BaseIngestor):
 
 class ProductIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        def get_brand_group(row):
+        def get_product_group(row):
             cat = str(row.get("category", "")).strip().lower()
             brand = str(row.get("brand", "")).strip().lower()
             subcat = str(row.get("subcategory", "")).strip().lower()
-            if cat == "gears": return "gears"
+            if cat == "gears":
+                if brand == "maxxis": return "maxxis"
+                return "gears"
             if cat == "bikes":
                 if any(x in subcat for x in ["e-bikes", "e-scooters"]): return "others"
-                if any(x in brand for x in ["jeep", "hitasa"]): return "others"
+                if any(x in brand for x in ["jeep", "hitasa"]): return "oem bikes"
                 if any(x in brand for x in ["giant", "liv", "momentum"]): return "giant bikes"
                 if "java" in brand: return "java bikes"
                 return "oem bikes"
             return "others"
         
         df = df.copy()
-        df["brand_group"] = df.apply(get_brand_group, axis=1)
+        df["product_group"] = df.apply(get_product_group, axis=1)
         return df
 
 class DealerIngestor(BaseIngestor):

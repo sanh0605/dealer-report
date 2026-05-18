@@ -43,7 +43,7 @@ class ProductMaster(Base):
     item_name    = Column(Text)
     product_id   = Column(Text)
     product      = Column(Text)
-    brand_group  = Column(Text)
+    product_group  = Column(Text)
     brand        = Column(Text)
     category     = Column(Text)
     subcategory  = Column(Text)

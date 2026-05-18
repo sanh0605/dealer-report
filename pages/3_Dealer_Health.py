@@ -15,6 +15,7 @@ st.set_page_config(page_title="Sức khỏe Đối tác", layout="wide")
 try:
     if "user" not in st.session_state:
         st.error("Vui lòng đăng nhập từ trang chủ.")
+        PageLoader.empty()
         st.stop()
 
     st.title("Sức khỏe Đối tác")
@@ -56,7 +57,7 @@ try:
 
     # Pre-process dates
     if not SaleDataFrame.empty:
-        SaleDataFrame["date_transfer"] = pd.to_datetime(SaleDataFrame["date_transfer"], dayfirst=True, errors="coerce")
+        SaleDataFrame["date_transfer"] = pd.to_datetime(SaleDataFrame["date_transfer"], format="mixed", errors="coerce")
     if not ArDataFrame.empty:
         ArDataFrame["due_date"] = pd.to_datetime(ArDataFrame["due_date"], dayfirst=True, errors="coerce")
         for Col in ["total_order_value", "paid_amount", "refund_amount", "deduction_amount"]:

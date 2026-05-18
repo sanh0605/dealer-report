@@ -75,7 +75,7 @@
 | `size` | Text | ❌ Optional |
 
 **Auto-calculated fields (no validation needed):**
-- `brand_group` - automatically assigned based on category + brand rules (see [SCHEMA.md](SCHEMA.md))
+- `product_group` - automatically assigned based on category + brand rules (see [SCHEMA.md](SCHEMA.md))
 
 ---
 

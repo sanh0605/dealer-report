@@ -12,6 +12,7 @@ st.set_page_config(page_title="Vận động trường", layout="wide")
 try:
     if "user" not in st.session_state:
         st.error("Vui lòng đăng nhập từ trang chủ.")
+        PageLoader.empty()
         st.stop()
 
     user = st.session_state["user"]
