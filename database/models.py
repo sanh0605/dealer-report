@@ -105,6 +105,7 @@ class FieldVisitPlan(Base):
     staff_name = Column(Text)
     month_year = Column(Text, index=True)
     dealer_id  = Column(Text, index=True)
+    purpose    = Column(Text)
 
 class VisitLog(Base):
     __tablename__ = "visit_logs"
@@ -114,6 +115,7 @@ class VisitLog(Base):
     dealer_id    = Column(Text, index=True)
     plan_id      = Column(Text)
     visit_result = Column(Text)
+    purpose      = Column(Text)
 
 class User(Base):
     __tablename__ = "users"

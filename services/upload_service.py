@@ -25,6 +25,34 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
         "open_quantity": "open_qty",
         "sale_person": "salesperson",
         "quantity": "sales_volume",
+        "màu_sắc": "color",
+        "kích_cỡ": "size",
+        "màu": "color",
+        "kích_thước": "size",
+        "mã_sku": "item_id",
+        "mã_hàng": "item_id",
+        "tên_hàng": "item_name",
+        "thương_hiệu": "brand",
+        "dòng_xe": "model",
+        "nhóm_sản_phẩm": "category",
+        "mã_sản_phẩm": "product_id",
+        "doanh_thu": "sales_revenue",
+        "giá_vốn": "cost_of_goods",
+        "số_lượng": "sales_volume",
+        "mã_đơn_hàng": "order_id",
+        "ngày_đơn_hàng": "order_date",
+        "ngày_chuyển": "date_transfer",
+        "mã_đối_tác": "dealer_id",
+        "nhân_viên": "salesperson",
+        "admin": "sale_admin",
+        "kênh": "channel_name",
+        "đơn_giá": "unit_price_standard",
+        "thành_tiền": "total_price_standard",
+        "internal_reference": "item_id",
+        "brand/display_name": "brand",
+        "model/display_name": "model",
+        "product_template/display_name": "product",
+        "display_name": "item_name",
     }
     df.columns = [aliases.get(c, c) for c in clean_cols]
     return df
@@ -65,6 +93,9 @@ class BaseIngestor:
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Override to add custom business logic before upsert"""
+        # Standardize item_id if present
+        if "item_id" in df.columns:
+            df["item_id"] = df["item_id"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.strip()
         return df
 
     def process(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -104,6 +135,7 @@ class BaseIngestor:
 
 class SalesIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = super().transform(df)
         numeric_cols = ["sales_volume", "sales_revenue", "cost_of_goods", "total_price_standard", "unit_price_standard"]
         for col in numeric_cols:
             if col in df.columns:
@@ -128,6 +160,7 @@ class SalesIngestor(BaseIngestor):
 
 class ProductIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = super().transform(df)
         def get_product_group(row):
             cat = str(row.get("category", "")).strip().lower()
             brand = str(row.get("brand", "")).strip().lower()
@@ -149,6 +182,7 @@ class ProductIngestor(BaseIngestor):
 
 class DealerIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = super().transform(df)
         def get_region(sub_reg):
             sr = str(sub_reg).upper()
             if "MN" in sr: return "Miền Nam"

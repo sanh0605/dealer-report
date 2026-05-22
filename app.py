@@ -12,8 +12,8 @@ st.set_page_config(
 
 init_db()
 
-def _render_login():
-    """Render login page when user is not authenticated"""
+def render_login_page():
+    """Render the login form as the main entry point"""
     st.title("Dealer Report System")
     st.subheader("Sign In")
     with st.form("login_form"):
@@ -32,17 +32,43 @@ def _render_login():
                 "role": user.role,
                 "display_name": user.display_name,
             }
+            st.success(f"Welcome, {user.display_name}!")
             st.rerun()
         else:
             st.error("Invalid username or password.")
 
-if "user" not in st.session_state:
-    _render_login()
-else:
+def render_logout():
+    """Render sign out button and info in sidebar"""
     user = st.session_state["user"]
-    st.sidebar.success(f"Signed in as **{user['display_name']}** ({user['role']})")
+    st.sidebar.markdown(f"**Signed in as:**  \n{user['display_name']} ({user['role']})")
     if st.sidebar.button("Sign Out"):
         del st.session_state["user"]
         st.rerun()
-    st.title("📊 Dealer Report — Dashboard")
-    st.info("Use → sidebar to navigate to a module.")
+
+# --- PAGE DEFINITIONS ---
+login_page = st.Page(render_login_page, title="Log In", icon=":material/login:", default=True)
+
+# These pages are in the 'views/' directory (renamed from 'pages/')
+upload_page = st.Page("views/1_Upload.py", title="Upload dữ liệu", icon=":material/upload_file:")
+sales_page = st.Page("views/2_Sales_Dashboard.py", title="Báo cáo Doanh số", icon=":material/query_stats:")
+health_page = st.Page("views/3_Dealer_Health.py", title="Sức khỏe Đại lý", icon=":material/health_and_safety:")
+field_page = st.Page("views/6_Field_Operations.py", title="Đi thị trường", icon=":material/location_on:")
+lost_sales_page = st.Page("views/7_Lost_Sales.py", title="Cơ hội bị mất", icon=":material/trending_down:")
+admin_page = st.Page("views/8_Admin.py", title="Quản trị hệ thống", icon=":material/admin_panel_settings:")
+profile_page = st.Page("views/9_Profile.py", title="Thông tin cá nhân", icon=":material/person:")
+
+# --- NAVIGATION LOGIC ---
+if "user" not in st.session_state:
+    # If not logged in, only show the login page
+    pg = st.navigation([login_page], position="hidden") # Hide sidebar navigation when not logged in
+else:
+    # If logged in, show all functional pages
+    render_logout()
+    pg = st.navigation({
+        "Báo cáo & Dashboard": [sales_page, health_page],
+        "Dữ liệu & Vận hành": [upload_page, field_page, lost_sales_page],
+        "Hệ thống": [profile_page, admin_page]
+    })
+
+# Run the selected page
+pg.run()

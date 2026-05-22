@@ -38,7 +38,11 @@ def bar_chart(df: pd.DataFrame, x: str, y: str, title: str) -> go.Figure:
                  custom_data=[y],
                  labels={x: x_label, y_scaled: "Doanh số", "color": "Phân loại"})
     fig.update_traces(hovertemplate="%{x}<br>Doanh số: %{customdata[0]:,.0f} VND<extra></extra>")
-    fig.update_layout(margin=dict(t=40, b=20), plot_bgcolor="white")
+    fig.update_layout(
+        margin=dict(t=40, b=20), 
+        plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
     fig.update_yaxes(ticksuffix=suffix, rangemode="normal")
     return fig
 
@@ -55,7 +59,11 @@ def horizontal_bar_chart(df: pd.DataFrame, x: str, y: str, title: str) -> go.Fig
                  custom_data=[x],
                  labels={x_scaled: "Doanh số", y: y_label})
     fig.update_traces(hovertemplate="%{y}<br>Doanh số: %{customdata[0]:,.0f} VND<extra></extra>")
-    fig.update_layout(margin=dict(t=40, b=20), plot_bgcolor="white")
+    fig.update_layout(
+        margin=dict(t=40, b=20), 
+        plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
     fig.update_xaxes(ticksuffix=suffix, rangemode="normal")
     return fig
 
@@ -66,7 +74,11 @@ def stacked_bar_chart(df: pd.DataFrame, x: str, y: str, color: str, title: str) 
                  custom_data=[y],
                  labels={x: x_label, y_scaled: "Doanh số", color: "Nhóm thương hiệu"})
     fig.update_traces(hovertemplate="%{x} (%{fullData.name})<br>Doanh số: %{customdata[0]:,.0f} VND<extra></extra>")
-    fig.update_layout(margin=dict(t=40, b=20), plot_bgcolor="white")
+    fig.update_layout(
+        margin=dict(t=40, b=20), 
+        plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
     fig.update_yaxes(ticksuffix=suffix, rangemode="normal")
     return fig
 
@@ -95,8 +107,15 @@ def line_chart(df: pd.DataFrame, x: str, y: str, title: str,
                   color_discrete_sequence=PALETTE, markers=True,
                   custom_data=[y],
                   labels={x: "Thời gian", y_scaled: "Doanh số", color: "Phân loại"})
-    fig.update_traces(hovertemplate="%{x}<br>Doanh số: %{customdata[0]:,.0f} VND<extra></extra>")
-    fig.update_layout(margin=dict(t=40, b=20), plot_bgcolor="white")
+    fig.update_traces(
+        hovertemplate="%{x}<br>Doanh số: %{customdata[0]:,.0f} VND<extra></extra>",
+        marker=dict(size=8)
+    )
+    fig.update_layout(
+        margin=dict(t=40, b=20), 
+        plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
     fig.update_yaxes(ticksuffix=suffix, rangemode="normal")
     return fig
 
@@ -112,7 +131,11 @@ def scatter_chart(df: pd.DataFrame, x: str, y: str, color: str, title: str, hove
                      hover_name=hover_name,
                      color_discrete_map={"Tốt": "#2ca02c", "Cảnh báo": "#ff7f0e", "Nguy hiểm": "#d62728"},
                      labels={x: "Hạng mục X", y: "Hạng mục Y", color: "Trạng thái"})
-    fig.update_layout(margin=dict(t=40, b=20), plot_bgcolor="white")
+    fig.update_layout(
+        margin=dict(t=40, b=20), 
+        plot_bgcolor="white",
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+    )
     return fig
 
 def histogram_chart(df: pd.DataFrame, x: str, title: str, nbins: int = 20) -> go.Figure:

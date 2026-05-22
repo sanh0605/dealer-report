@@ -35,6 +35,6 @@ REQUIRED_COLUMNS: dict[str, list[str]] = {
     "inventory_status": ["item_id","stock_on_hand","location","location_region"],
     "incoming_shipments": ["item_id","incoming_qty","expected_arrival_date"],
     "open_orders": ["order_id","dealer_id","item_id","open_qty"],
-    "field_visit_plans": ["staff_name","month_year","dealer_id"],
-    "visit_logs": ["date","staff_name","dealer_id","visit_result"],
+    "field_visit_plans": ["staff_name","month_year","dealer_id","purpose"],
+    "visit_logs": ["date","staff_name","dealer_id","visit_result","purpose"],
 }

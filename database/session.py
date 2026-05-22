@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
 from database.models import Base
@@ -17,6 +17,19 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    # Safely add columns to existing tables since create_all doesn't handle migrations
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE field_visit_plans ADD COLUMN purpose TEXT"))
+            conn.commit()
+        except Exception:
+            pass # Column likely exists
+            
+        try:
+            conn.execute(text("ALTER TABLE visit_logs ADD COLUMN purpose TEXT"))
+            conn.commit()
+        except Exception:
+            pass # Column likely exists
 
 def get_db() -> Session:
     return SessionLocal()
