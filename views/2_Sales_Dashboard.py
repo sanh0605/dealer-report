@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-from database.session import get_db
-from database.models import SaleRecord, DealerMaster, ProductMaster, SalesTarget
+from database.gsheets_db import read_sheet
 from services.analytics import calc_total_revenue, calc_gross_profit, calc_target_completion
 from services.export_ppt import generate_ppt_bytes
 from components.kpi_cards import render_kpi_row
@@ -22,32 +21,29 @@ try:
     st.caption("Doanh số > Tổng quan")
     st.title("Doanh số")
 
-    DatabaseSession = get_db()
-    try:
-        SalesRows = DatabaseSession.query(SaleRecord).all()
-        DealerRows = DatabaseSession.query(DealerMaster).all()
-        ProductRows = DatabaseSession.query(ProductMaster).all()
-        TargetRows = DatabaseSession.query(SalesTarget).all()
-    finally:
-        DatabaseSession.close()
+    # Load data from Google Sheets
+    MainDataFrame = read_sheet("sale_records")
+    DealerDataFrame = read_sheet("dealer_master")
+    ProductDataFrame = read_sheet("product_master")
+    TargetDataFrame = read_sheet("sales_targets")
 
-    if not SalesRows:
+    if MainDataFrame.empty:
         st.info("Không có dữ liệu bán hàng. Vui lòng tải dữ liệu lên qua trang Upload.")
         PageLoader.empty()
         st.stop()
 
-    MainDataFrame = pd.DataFrame([r.__dict__ for r in SalesRows]).drop(columns=["_sa_instance_state"], errors="ignore")
+    # Pre-process MainDataFrame
     MainDataFrame["date_transfer"] = pd.to_datetime(MainDataFrame["date_transfer"], format="mixed", errors="coerce")
     MainDataFrame["month_year"] = MainDataFrame["date_transfer"].dt.strftime("%m/%Y")
-    MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]] = (
-        MainDataFrame[["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]].apply(pd.to_numeric, errors="coerce")
-    )
+    numeric_cols = ["sales_revenue", "cost_of_goods", "sales_volume", "total_price_standard"]
+    for col in numeric_cols:
+        if col in MainDataFrame.columns:
+            MainDataFrame[col] = pd.to_numeric(MainDataFrame[col], errors="coerce").fillna(0)
 
     # Join with Dealer Master to retrieve geographic region
-    if DealerRows:
-        DealerDataFrame = pd.DataFrame([r.__dict__ for r in DealerRows]).drop(columns=["_sa_instance_state"], errors="ignore")
-        DealerDataFrame["dealer_id"] = DealerDataFrame["dealer_id"].str.strip()
-        MainDataFrame["dealer_id"] = MainDataFrame["dealer_id"].str.strip()
+    if not DealerDataFrame.empty:
+        DealerDataFrame["dealer_id"] = DealerDataFrame["dealer_id"].astype(str).str.strip()
+        MainDataFrame["dealer_id"] = MainDataFrame["dealer_id"].astype(str).str.strip()
         
         def FixRegion(row):
             """Apply auto-assignment rule for region based on sub_region code"""
@@ -60,12 +56,17 @@ try:
             return "Unknown"
         
         DealerDataFrame["region"] = DealerDataFrame.apply(FixRegion, axis=1)
-        MainDataFrame = MainDataFrame.merge(DealerDataFrame[["dealer_id", "dealer_name", "region", "province", "sub_region"]], on="dealer_id", how="left")
+        # Merge, but avoid duplicate columns if already present
+        cols_to_use = [c for c in ["dealer_id", "dealer_name", "region", "province", "sub_region"] if c in DealerDataFrame.columns]
+        MainDataFrame = MainDataFrame.merge(DealerDataFrame[cols_to_use], on="dealer_id", how="left", suffixes=("", "_dealer"))
+        # If dealer_name was already in MainDataFrame, fill NaNs
+        if "dealer_name_dealer" in MainDataFrame.columns:
+            MainDataFrame["dealer_name"] = MainDataFrame["dealer_name"].fillna(MainDataFrame["dealer_name_dealer"])
+            MainDataFrame = MainDataFrame.drop(columns=["dealer_name_dealer"])
     else:
-        MainDataFrame["dealer_name"] = ""
-        MainDataFrame["region"] = "Unknown"
-        MainDataFrame["province"] = ""
-        MainDataFrame["sub_region"] = "Unknown"
+        for col in ["dealer_name", "region", "province", "sub_region"]:
+            if col not in MainDataFrame.columns:
+                MainDataFrame[col] = ""
 
     def AssignRegionGroup(row):
         """Apply custom business rules for region grouping based on channel and sub_region"""
@@ -83,9 +84,10 @@ try:
     MainDataFrame.loc[MainDataFrame["channel_name"].str.upper().str.contains("SIÊU THỊ", na=False), "region"] = "Siêu thị"
 
     # Join with Product Master to retrieve brand grouping
-    if ProductRows:
-        ProductDataFrame = pd.DataFrame([r.__dict__ for r in ProductRows]).drop(columns=["_sa_instance_state"], errors="ignore")
-        
+    if not ProductDataFrame.empty:
+        ProductDataFrame["item_id"] = ProductDataFrame["item_id"].astype(str).str.strip()
+        MainDataFrame["item_id"] = MainDataFrame["item_id"].astype(str).str.strip()
+
         def FixProductGroup(row):
             """Apply custom business rules for product categorization"""
             Category = str(row.get("category", "")).strip().lower()
@@ -104,21 +106,20 @@ try:
             return "others"
         
         ProductDataFrame["product_group"] = ProductDataFrame.apply(FixProductGroup, axis=1)
-        MainDataFrame = MainDataFrame.merge(ProductDataFrame[["item_id", "product_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"]], on="item_id", how="left")
+        cols_to_use = [c for c in ["item_id", "product_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"] if c in ProductDataFrame.columns]
+        MainDataFrame = MainDataFrame.merge(ProductDataFrame[cols_to_use], on="item_id", how="left", suffixes=("", "_prod"))
         
         # Fill NaN for product detail columns to prevent empty UI cells
         for col in ["brand", "category", "subcategory", "model", "color", "size", "item_name"]:
-            if col in MainDataFrame.columns:
+            if col + "_prod" in MainDataFrame.columns:
+                MainDataFrame[col] = MainDataFrame[col].fillna(MainDataFrame[col + "_prod"])
+                MainDataFrame = MainDataFrame.drop(columns=[col + "_prod"])
+            elif col in MainDataFrame.columns:
                 MainDataFrame[col] = MainDataFrame[col].fillna("")
     else:
-        MainDataFrame["product_group"] = "others"
-        MainDataFrame["brand"] = ""
-        MainDataFrame["category"] = ""
-        MainDataFrame["subcategory"] = ""
-        MainDataFrame["model"] = ""
-        MainDataFrame["color"] = ""
-        MainDataFrame["size"] = ""
-        MainDataFrame["item_name"] = ""
+        for col in ["product_group", "brand", "category", "subcategory", "model", "color", "size", "item_name"]:
+            if col not in MainDataFrame.columns:
+                MainDataFrame[col] = "others" if col == "product_group" else ""
 
     MainDataFrame["region"] = MainDataFrame["region"].fillna("Unknown")
     MainDataFrame["product_group"] = MainDataFrame["product_group"].fillna("others")
@@ -327,17 +328,18 @@ try:
         OrderDelta = "N/A"
         AvgOrderDelta = "N/A"
 
+    # Targets logic
     if not SelectedRegion:
-        RelevantTargets = TargetRows
+        RelevantTargets = TargetDataFrame
     else:
         RegionCodeMap = {"Miền Nam": "MN", "Miền Bắc": "MB", "Miền Trung": "MT"}
         SelectedRegionCodes = [RegionCodeMap.get(r) for r in SelectedRegion if r in RegionCodeMap]
-        if SelectedRegionCodes:
-            RelevantTargets = [t for t in TargetRows if t.sub_region and any(t.sub_region.startswith(code) for code in SelectedRegionCodes)]
+        if SelectedRegionCodes and not TargetDataFrame.empty:
+            RelevantTargets = TargetDataFrame[TargetDataFrame["sub_region"].str.startswith(tuple(SelectedRegionCodes), na=False)]
         else:
-            RelevantTargets = TargetRows
+            RelevantTargets = TargetDataFrame
 
-    TargetRevenue = sum(t.target_revenue or 0 for t in RelevantTargets)
+    TargetRevenue = RelevantTargets["target_revenue"].apply(pd.to_numeric, errors="coerce").sum() if not RelevantTargets.empty else 0
     CompletionRate = calc_target_completion(CurrentTotalRevenue, TargetRevenue)
 
     render_kpi_row([

@@ -6,7 +6,6 @@ import streamlit as st
 import pandas as pd
 import io
 from services.identity import require_role
-from database.session import get_db
 from services.upload_service import load_file, validate_columns, upsert_dataframe
 from components.ui_utils import show_centered_loader
 from config import REQUIRED_COLUMNS
@@ -15,10 +14,14 @@ from config import REQUIRED_COLUMNS
 PageLoader = show_centered_loader()
 
 try:
+    if "user" not in st.session_state:
+        st.error("Vui lòng đăng nhập.")
+        st.stop()
+
     user = st.session_state["user"]
 
     try:
-        require_role(type("U", (), user)(), ["Admin"])
+        require_role(user, ["Admin"])
     except PermissionError:
         st.error("Admin access required to upload data.")
         st.stop()
@@ -31,7 +34,7 @@ try:
     ]
 
     st.title("Data Upload")
-    st.caption("Upload CSV or Excel files for each data table. Existing records are updated, new records are inserted.")
+    st.caption("Upload CSV or Excel files for each data table. Existing records are updated (upsert), new records are inserted.")
 
     table_name = st.selectbox("Select table to upload", TABLES)
 
@@ -60,14 +63,12 @@ try:
         else:
             st.success(f"All required columns present. {len(df)} rows ready to upload.")
             if st.button("Confirm Upload"):
-                db = get_db()
+                # No DB session needed for GSheets
                 try:
-                    count = upsert_dataframe(db, df, table_name)
-                    st.success(f"Uploaded {count} rows to **{table_name}**.")
+                    count = upsert_dataframe(None, df, table_name)
+                    st.success(f"Uploaded {count} rows to **{table_name}** (Google Sheets).")
                 except Exception as e:
                     st.error(f"Upload failed: {e}")
-                finally:
-                    db.close()
 
 finally:
     PageLoader.empty()

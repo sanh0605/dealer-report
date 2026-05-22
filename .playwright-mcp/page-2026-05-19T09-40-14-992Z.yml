@@ -1,0 +1,20 @@
+- generic [ref=e3]:
+  - banner [ref=e6]:
+    - generic [ref=e9]:
+      - button "Deploy" [ref=e11] [cursor=pointer]:
+        - generic [ref=e13]: Deploy
+      - button "Main menu" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+  - alert [ref=e22]:
+    - generic [ref=e25]:
+      - generic [ref=e26]: "ModuleNotFoundError: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app)."
+      - generic [ref=e27]:
+        - generic [ref=e28]: "Traceback:"
+        - code [ref=e31]:
+          - generic [ref=e32]: File "C:\Users\Admin\Desktop\DEALER REPORT\pages\2_Sales_Dashboard.py", line 3, in <module> from database.session import get_db
+      - generic [ref=e33]:
+        - button "Copy" [ref=e34] [cursor=pointer]
+        - link "Ask Google" [ref=e35] [cursor=pointer]:
+          - /url: https://www.google.com/search?q=ModuleNotFoundError%3A%20This%20app%20has%20encountered%20an%20error.%20The%20original%20error%20message%20is%20redacted%20to%20prevent%20data%20leaks.%20Full%20error%20details%20have%20been%20recorded%20in%20the%20logs%20(if%20you're%20on%20Streamlit%20Cloud%2C%20click%20on%20'Manage%20app'%20in%20the%20lower%20right%20of%20your%20app).
+        - link "Ask ChatGPT" [ref=e36] [cursor=pointer]:
+          - /url: https://chatgpt.com/?q=ModuleNotFoundError%3A%20This%20app%20has%20encountered%20an%20error.%20The%20original%20error%20message%20is%20redacted%20to%20prevent%20data%20leaks.%20Full%20error%20details%20have%20been%20recorded%20in%20the%20logs%20(if%20you're%20on%20Streamlit%20Cloud%2C%20click%20on%20'Manage%20app'%20in%20the%20lower%20right%20of%20your%20app).%0A%0AFile%20%22C%3A%5CUsers%5CAdmin%5CDesktop%5CDEALER%20REPORT%5Cpages%5C2_Sales_Dashboard.py%22%2C%20line%203%2C%20in%20%3Cmodule%3E%0A%20%20%20%20from%20database.session%20import%20get_db

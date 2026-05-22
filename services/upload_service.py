@@ -1,15 +1,24 @@
 import io
 import pandas as pd
-from datetime import datetime, date
-from sqlalchemy.orm import Session
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.types import Date, DateTime
+from datetime import datetime
 from config import REQUIRED_COLUMNS
-from database.models import (
-    SaleRecord, AccountsReceivableLedger, ProductMaster, DealerMaster,
-    SalesTarget, InventoryStatus, IncomingShipment, OpenOrder,
-    FieldVisitPlan, VisitLog
-)
+from database.gsheets_db import read_sheet, update_sheet
+
+# --- PK Definition (replacing SQLAlchemy model info) ---
+_TABLE_PKS = {
+    "sale_records": ["order_id", "item_id"],
+    "product_master": ["item_id"],
+    "dealer_master": ["dealer_id"],
+    "accounts_receivable_ledger": ["dealer_id", "order_id"],
+    "sales_targets": ["month_year", "sub_region"],
+    "inventory_status": ["item_id", "warehouse"],
+    "incoming_shipments": ["shipment_id", "item_id"],
+    "open_orders": ["order_id", "item_id"],
+    "field_visit_plans": ["month_year", "staff_name", "dealer_id"],
+    "visit_logs": ["id"],
+    "users": ["id"],
+    "lost_sales": ["id"]
+}
 
 # --- File Utilities ---
 
@@ -72,66 +81,46 @@ def validate_columns(df: pd.DataFrame, table_name: str) -> list[str]:
 # --- Ingestion Framework ---
 
 class BaseIngestor:
-    def __init__(self, db: Session, model):
-        self.db = db
-        self.model = model
-        self.mapper = model.__mapper__
-        self.cols = {c.key for c in self.mapper.columns}
-        self.pk_cols = [c.key for c in self.mapper.primary_key]
-
-    def _convert_dates(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        for col in df.columns:
-            if col not in self.cols:
-                continue
-            col_type = self.mapper.columns[col].type
-            if isinstance(col_type, (Date, DateTime)):
-                df[col] = pd.to_datetime(df[col], format="mixed", errors="coerce")
-                if isinstance(col_type, Date):
-                    df[col] = df[col].dt.date
-        return df
+    def __init__(self, table_name: str):
+        self.table_name = table_name
+        self.pk_cols = _TABLE_PKS.get(table_name, [])
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Override to add custom business logic before upsert"""
-        # Standardize item_id if present
         if "item_id" in df.columns:
             df["item_id"] = df["item_id"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.strip()
         return df
 
     def process(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self.transform(df)
-        df = self._convert_dates(df)
-        # Filter to model columns
-        df = df[[c for c in df.columns if c in self.cols]]
         # Drop rows missing PK
-        existing_pk_cols = [c for c in self.pk_cols if c in df.columns]
-        if existing_pk_cols:
-            df = df.dropna(subset=existing_pk_cols)
+        if self.pk_cols:
+            existing_pks = [c for c in self.pk_cols if c in df.columns]
+            if existing_pks:
+                df = df.dropna(subset=existing_pks)
         return df
 
     def upsert(self, df: pd.DataFrame) -> int:
-        df = self.process(df)
-        
-        # Safely replace all NaNs with None for SQLAlchemy
-        df = df.astype(object).where(pd.notna(df), None)
-        
-        records = df.to_dict(orient="records")
-        if not records:
+        new_data = self.process(df)
+        if new_data.empty:
             return 0
             
-        chunk_size = 50
-        for i in range(0, len(records), chunk_size):
-            chunk = records[i:i + chunk_size]
-            stmt = sqlite_insert(self.model.__table__).values(chunk)
-            update_cols = {c: stmt.excluded[c] for c in df.columns if c not in self.pk_cols}
-            if update_cols:
-                stmt = stmt.on_conflict_do_update(index_elements=self.pk_cols, set_=update_cols)
-            else:
-                stmt = stmt.on_conflict_do_nothing(index_elements=self.pk_cols)
-            self.db.execute(stmt)
+        # Read existing data from Google Sheets
+        existing_df = read_sheet(self.table_name, ttl=0)
+        
+        if existing_df.empty:
+            final_df = new_data
+        else:
+            # Concatenate
+            final_df = pd.concat([existing_df, new_data], ignore_index=True)
             
-        self.db.commit()
-        return len(records)
+            # Deduplicate based on PKs, keeping the last (newest) entry
+            if self.pk_cols:
+                final_df = final_df.drop_duplicates(subset=self.pk_cols, keep='last')
+        
+        # Write back to Google Sheets
+        update_sheet(self.table_name, final_df)
+        return len(new_data)
 
 class SalesIngestor(BaseIngestor):
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -142,7 +131,7 @@ class SalesIngestor(BaseIngestor):
                 df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
         
         if "sales_volume" in df.columns:
-            df["sales_volume"] = df["sales_volume"].astype(int)
+            df["sales_volume"] = df["sales_volume"].astype(float).astype(int)
         
         # Aggregation logic for sale_records
         agg_dict = {}
@@ -198,22 +187,24 @@ class DealerIngestor(BaseIngestor):
 # --- Ingestion Registry ---
 
 _INGESTOR_MAP = {
-    "sale_records": (SaleRecord, SalesIngestor),
-    "product_master": (ProductMaster, ProductIngestor),
-    "dealer_master": (DealerMaster, DealerIngestor),
-    "accounts_receivable_ledger": (AccountsReceivableLedger, BaseIngestor),
-    "sales_targets": (SalesTarget, BaseIngestor),
-    "inventory_status": (InventoryStatus, BaseIngestor),
-    "incoming_shipments": (IncomingShipment, BaseIngestor),
-    "open_orders": (OpenOrder, BaseIngestor),
-    "field_visit_plans": (FieldVisitPlan, BaseIngestor),
-    "visit_logs": (VisitLog, BaseIngestor),
+    "sale_records": SalesIngestor,
+    "product_master": ProductIngestor,
+    "dealer_master": DealerIngestor,
+    "accounts_receivable_ledger": BaseIngestor,
+    "sales_targets": BaseIngestor,
+    "inventory_status": BaseIngestor,
+    "incoming_shipments": BaseIngestor,
+    "open_orders": BaseIngestor,
+    "field_visit_plans": BaseIngestor,
+    "visit_logs": BaseIngestor,
 }
 
-def upsert_dataframe(db: Session, df: pd.DataFrame, table_name: str) -> int:
+def upsert_dataframe(dummy_db, df: pd.DataFrame, table_name: str) -> int:
+    # dummy_db is ignored
     if table_name not in _INGESTOR_MAP:
-        raise ValueError(f"No ingestor registered for table: {table_name}")
+        ingestor = BaseIngestor(table_name)
+    else:
+        ingestor_class = _INGESTOR_MAP[table_name]
+        ingestor = ingestor_class(table_name)
     
-    model_class, ingestor_class = _INGESTOR_MAP[table_name]
-    ingestor = ingestor_class(db, model_class)
     return ingestor.upsert(df)

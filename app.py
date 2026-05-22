@@ -1,7 +1,6 @@
 import streamlit as st
-from database.session import init_db, get_db
+from database.gsheets_db import init_sheets
 from services.identity import login
-from database.models import User
 
 st.set_page_config(
     page_title="Dealer Report",
@@ -10,7 +9,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-init_db()
+# Initialize Google Sheets structure if needed
+init_sheets()
 
 def render_login_page():
     """Render the login form as the main entry point"""
@@ -21,11 +21,8 @@ def render_login_page():
         password = st.text_input("Password", type="password")
         submitted = st.form_submit_button("Sign In")
     if submitted:
-        db = get_db()
-        try:
-            user = login(db, username, password)
-        finally:
-            db.close()
+        # DB session is no longer needed as services handle connection
+        user = login(None, username, password)
         if user:
             st.session_state["user"] = {
                 "username": user.username,
@@ -48,7 +45,7 @@ def render_logout():
 # --- PAGE DEFINITIONS ---
 login_page = st.Page(render_login_page, title="Log In", icon=":material/login:", default=True)
 
-# These pages are in the 'views/' directory (renamed from 'pages/')
+# These pages are in the 'views/' directory
 upload_page = st.Page("views/1_Upload.py", title="Upload dữ liệu", icon=":material/upload_file:")
 sales_page = st.Page("views/2_Sales_Dashboard.py", title="Báo cáo Doanh số", icon=":material/query_stats:")
 health_page = st.Page("views/3_Dealer_Health.py", title="Sức khỏe Đại lý", icon=":material/health_and_safety:")
