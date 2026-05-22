@@ -32,16 +32,15 @@ def get_connection():
 def get_existing_worksheets(conn):
     """Robustly get existing worksheet names"""
     try:
-        # Use the underlying gspread spreadsheet object
-        # st-gsheets-connection stores it in _spreadsheet
-        if hasattr(conn, "_spreadsheet"):
-            return [ws.title for ws in conn._spreadsheet.worksheets()]
-        # Fallback to internal client if _spreadsheet is not yet initialized
-        spreadsheet = conn.client.open_by_key(conn._spreadsheet_id)
-        return [ws.title for ws in spreadsheet.worksheets()]
-    except Exception as e:
-        # st.warning(f"Metadata error: {e}")
-        return []
+        # st-gsheets-connection makes it hard to get worksheet list 
+        # without potentially failing on different connection modes.
+        # We try the most direct gspread method.
+        if hasattr(conn, "client"):
+            spreadsheet = conn.client.open_by_key(conn._spreadsheet_id)
+            return [ws.title for ws in spreadsheet.worksheets()]
+    except:
+        pass
+    return []
 
 def read_sheet(worksheet_name: str, ttl: int = 600) -> pd.DataFrame:
     """Read a worksheet and return as a DataFrame"""
@@ -62,16 +61,16 @@ def update_sheet(worksheet_name: str, df: pd.DataFrame):
     ws_name = WORKSHEETS.get(worksheet_name, worksheet_name)
     
     try:
-        existing_ws = get_existing_worksheets(conn)
-            
-        if ws_name in existing_ws:
-            conn.update(worksheet=ws_name, data=df)
-        else:
-            conn.create(worksheet=ws_name, data=df)
-            
+        conn.update(worksheet=ws_name, data=df)
         st.cache_data.clear()
     except Exception as e:
-        st.error(f"Error updating worksheet '{ws_name}': {e}")
+        # If update fails, maybe it doesn't exist? Try create.
+        if "not found" in str(e).lower() or "already exists" not in str(e).lower():
+            try:
+                conn.create(worksheet=ws_name, data=df)
+                st.cache_data.clear()
+            except:
+                st.error(f"Error updating/creating worksheet '{ws_name}': {e}")
 
 def append_row(worksheet_name: str, row_dict: dict):
     """Append a single row to a worksheet"""
@@ -87,6 +86,7 @@ def append_row(worksheet_name: str, row_dict: dict):
 
 def init_sheets():
     """Initialize necessary worksheets with headers if they don't exist"""
+    # This function is now silent to avoid cluttering the UI with 'already exists' messages
     conn = get_connection()
     
     schema = {
@@ -96,20 +96,20 @@ def init_sheets():
         "lost_sales": ["id", "date", "staff_name", "dealer_id", "item_id", "lost_volume", "lost_revenue"]
     }
     
-    existing_ws = get_existing_worksheets(conn)
-
-    # We check for 'users' sheet specifically to decide if we should run init
-    if WORKSHEETS["users"] not in existing_ws:
-        st.info("Initializing Google Sheets database structure...")
+    # Try reading the users sheet. If it works, we assume DB is initialized.
+    try:
+        df = conn.read(worksheet=WORKSHEETS["users"], ttl=0)
+        if not df.empty or len(df.columns) > 0:
+            return # Already exists and has structure
+    except:
+        # If read fails, attempt to create the schema
         for ws_key, headers in schema.items():
             ws_name = WORKSHEETS[ws_key]
-            if ws_name not in existing_ws:
-                df_init = pd.DataFrame(columns=headers)
-                try:
-                    conn.create(worksheet=ws_name, data=df_init)
-                    st.write(f"✅ Created worksheet: {ws_name}")
-                except Exception as e:
-                    # If create fails, maybe it already exists and metadata check failed
-                    st.error(f"Failed to create {ws_name}: {e}")
-        st.success("Database structure initialization complete.")
+            df_init = pd.DataFrame(columns=headers)
+            try:
+                conn.create(worksheet=ws_name, data=df_init)
+            except Exception as e:
+                # Silently ignore 'already exists' errors
+                if "already exists" not in str(e).lower():
+                    st.error(f"Failed to initialize {ws_name}: {e}")
         st.cache_data.clear()
