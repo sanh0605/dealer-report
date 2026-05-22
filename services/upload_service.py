@@ -20,6 +20,9 @@ _TABLE_PKS = {
     "lost_sales": ["id"]
 }
 
+# Known ID columns that must stay as strings
+_ID_COLUMNS = ["dealer_id", "item_id", "order_id", "id", "product_id", "shipment_id"]
+
 # --- File Utilities ---
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -87,8 +90,11 @@ class BaseIngestor:
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """Override to add custom business logic before upsert"""
-        if "item_id" in df.columns:
-            df["item_id"] = df["item_id"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.strip()
+        for col in _ID_COLUMNS:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.strip()
+                # If the string is 'nan', make it empty or actual NaN
+                df[col] = df[col].replace('nan', '')
         return df
 
     def process(self, df: pd.DataFrame) -> pd.DataFrame:

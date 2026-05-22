@@ -22,28 +22,11 @@ try:
 
     st.title("⚙️ Bảng điều khiển Quản trị")
 
-    tab_users, tab_audit, tab_migration = st.tabs(["Quản lý Người dùng", "Nhật ký Hệ thống (Audit)", "🚚 Di chuyển Dữ liệu"])
+    tab_users, tab_audit = st.tabs(["Quản lý Người dùng", "Nhật ký Hệ thống (Audit)"])
 
     # Load users from Google Sheets
     users_df = read_sheet("users", ttl=0)
     
-    with tab_migration:
-        st.subheader("Khởi tạo Dữ liệu Hệ thống")
-        st.info("Nút này sẽ tự động tải toàn bộ dữ liệu mẫu (Excel) từ máy chủ lên Google Sheets. Phù hợp cho lần đầu thiết lập hệ thống.")
-        
-        if st.button("🚀 Bắt đầu Di chuyển Dữ liệu", type="primary", use_container_width=True):
-            with st.status("Đang di chuyển dữ liệu...", expanded=True) as status:
-                try:
-                    from auto_upload import seed_sample_data
-                    # We'll need to wrap print calls in seed_sample_data or just let it run
-                    # For a better UI, we can use a callback or just let it finish.
-                    seed_sample_data()
-                    status.update(label="Di chuyển dữ liệu hoàn tất!", state="complete", expanded=False)
-                    st.success("Tất cả dữ liệu đã được tải lên Google Sheets thành công. Vui lòng kiểm tra các Dashboard.")
-                except Exception as e:
-                    status.update(label="Di chuyển thất bại", state="error")
-                    st.error(f"Lỗi: {e}")
-
     with tab_users:
         if not users_df.empty:
             display_users = users_df[["username", "role", "display_name"]].copy()

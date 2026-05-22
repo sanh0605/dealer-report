@@ -42,6 +42,9 @@ def get_existing_worksheets(conn):
         pass
     return []
 
+# Known ID columns that must stay as strings
+_ID_COLUMNS = ["dealer_id", "item_id", "order_id", "id", "product_id", "shipment_id"]
+
 def read_sheet(worksheet_name: str, ttl: int = 600) -> pd.DataFrame:
     """Read a worksheet and return as a DataFrame"""
     conn = get_connection()
@@ -51,6 +54,14 @@ def read_sheet(worksheet_name: str, ttl: int = 600) -> pd.DataFrame:
         df = conn.read(worksheet=ws_name, ttl=ttl)
         # Drop completely empty rows
         df = df.dropna(how="all")
+        
+        # Enforce string types for ID columns
+        if not df.empty:
+            for col in _ID_COLUMNS:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.strip()
+                    df[col] = df[col].replace('nan', '')
+                    
         return df
     except Exception:
         return pd.DataFrame()
