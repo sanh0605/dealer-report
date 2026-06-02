@@ -11,15 +11,13 @@ from components.ui_utils import show_centered_loader
 PageLoader = show_centered_loader()
 
 try:
-    try:
-        from services.export_pdf import generate_pdf_bytes, build_dashboard_html
-        PdfExportAvailable = True
-    except (ImportError, OSError):
-        PdfExportAvailable = False
-
     CurrentUser = st.session_state["user"]
     st.caption("Doanh số > Tổng quan")
-    st.title("Doanh số")
+    ColTitle, ColExportBtn = st.columns([8, 1], vertical_alignment="center")
+    with ColTitle:
+        st.title("Doanh số")
+    with ColExportBtn:
+        ExportBtnContainer = st.container()
 
     # Load data from Google Sheets
     MainDataFrame = read_sheet("sale_records")
@@ -350,41 +348,30 @@ try:
         {"label": "Hoàn thành mục tiêu", "value": f"{CompletionRate:.1f}%", "delta": f"Mục tiêu: {TargetRevenue:,.0f}"},
     ])
 
-    if PdfExportAvailable:
-        ColExp1, ColExp2, ColExp3 = st.columns(3)
-        with ColExp1:
-            if st.button("Xuất PDF"):
-                DashboardHtml = build_dashboard_html(
-                    kpis={
-                        "Doanh số tổng": f"{CurrentTotalRevenue:,.0f} ({RevenueDelta})",
-                        "Tổng số đơn": f"{CurrentTotalOrders:,} ({OrderDelta})",
-                        "Tổng số lượng": f"{CurrentTotalVolume:,} ({VolumeDelta})",
-                        "Giá trị đơn hàng": f"{CurrentAvgOrderValue:,.0f} ({AvgOrderDelta})",
-                        "Hoàn thành mục tiêu": f"{CompletionRate:.1f}% (Mục tiêu: {TargetRevenue:,.0f})",
-                    },
-                    tables=[]
-                )
-                PdfBytesContent = generate_pdf_bytes(DashboardHtml)
-                st.download_button("Tải PDF", data=PdfBytesContent, file_name="bao_cao_dealer_report.pdf", mime="application/pdf")
-        
-        with ColExp2:
-            if st.button("Xuất PowerPoint"):
-                PptBytesContent = generate_ppt_bytes(
-                    kpis={
-                        "Doanh số tổng": f"{CurrentTotalRevenue:,.0f} ({RevenueDelta})",
-                        "Tổng số đơn": f"{CurrentTotalOrders:,} ({OrderDelta})",
-                        "Tổng số lượng": f"{CurrentTotalVolume:,} ({VolumeDelta})",
-                        "Giá trị đơn hàng": f"{CurrentAvgOrderValue:,.0f} ({AvgOrderDelta})",
-                        "Hoàn thành mục tiêu": f"{CompletionRate:.1f}% (Mục tiêu: {TargetRevenue:,.0f})",
-                    }
-                )
-                st.download_button("Tải PowerPoint", data=PptBytesContent, file_name="bao_cao_dealer_report.pptx", mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    # Export popover (rendered into title row placeholder)
+    from services.export_excel import generate_dashboard_excel
+    with ExportBtnContainer:
+        with st.popover("Xuất dữ liệu"):
+            # Cache export data per filter combination
+            _export_key = f"{SelectedTime}_{SelectedRegion}_{SelectedBrand}_{ReferenceDate.date()}"
+            if st.session_state.get("_export_key") != _export_key:
+                st.session_state["_export_key"] = _export_key
+                with st.spinner("Đang chuẩn bị báo cáo..."):
+                    st.session_state["_export_ppt"] = generate_ppt_bytes(FilteredData, PreviousFilteredData, MainDataFrame, ReferenceDate)
+                    st.session_state["_export_xlsx"] = generate_dashboard_excel(FilteredData, PreviousFilteredData, MainDataFrame, ReferenceDate)
 
-        with ColExp3:
+            st.download_button("Tạo báo cáo PPT", data=st.session_state["_export_ppt"],
+                               file_name="bao_cao_dealer_report.pptx",
+                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                               use_container_width=True)
+
+            st.download_button("Tạo báo cáo Excel", data=st.session_state["_export_xlsx"],
+                               file_name="bao_cao_tong_hop.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                               use_container_width=True)
+
             CsvDataContent = FilteredData.to_csv(index=False).encode("utf-8-sig")
-            st.download_button("Tải CSV", data=CsvDataContent, file_name="du_lieu_ban_hang.csv", mime="text/csv")
-    else:
-        st.info("Tính năng xuất PDF không khả dụng (thiếu thư viện GTK). Vui lòng cài đặt GTK để sử dụng PDF export.")
+            st.download_button("Tải CSV (Raw Data)", data=CsvDataContent, file_name="du_lieu_ban_hang.csv", mime="text/csv", use_container_width=True)
 
     st.divider()
 

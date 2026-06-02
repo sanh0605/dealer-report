@@ -1,7 +1,15 @@
-from weasyprint import HTML
+import io
+from xhtml2pdf import pisa
 
 def generate_pdf_bytes(html_content: str) -> bytes:
-    return HTML(string=html_content).write_pdf()
+    result = io.BytesIO()
+    pisa_status = pisa.CreatePDF(
+        io.StringIO(html_content),
+        dest=result
+    )
+    if pisa_status.err:
+        raise Exception("Failed to generate PDF")
+    return result.getvalue()
 
 def build_dashboard_html(kpis: dict, tables: list[dict]) -> str:
     rows = ""

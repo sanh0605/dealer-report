@@ -37,7 +37,15 @@ try:
     st.divider()
 
     st.subheader("Đổi Mật khẩu")
-    with st.form("self_service_password_form"):
+    
+    if "pw_form_key" not in st.session_state:
+        st.session_state.pw_form_key = 0
+        
+    if "pw_success" in st.session_state and st.session_state.pw_success:
+        st.success("Đổi mật khẩu thành công.")
+        st.session_state.pw_success = False
+
+    with st.form(f"self_service_password_form_{st.session_state.pw_form_key}"):
         current_password = st.text_input("Mật khẩu hiện tại", type="password")
         new_password = st.text_input("Mật khẩu mới", type="password")
         confirm_pw   = st.text_input("Xác nhận Mật khẩu mới", type="password")
@@ -54,9 +62,18 @@ try:
         else:
             success = change_password(None, str(user_data['id']), new_password, action_by=username)
             if success:
-                st.success("Đổi mật khẩu thành công.")
+                st.session_state.pw_success = True
+                st.session_state.pw_form_key += 1
+                st.rerun()
             else:
                 st.error("Đã xảy ra lỗi khi đổi mật khẩu.")
+
+    st.divider()
+
+    st.subheader("Đăng xuất")
+    if st.button("Đăng xuất khỏi hệ thống", type="primary", use_container_width=True):
+        del st.session_state["user"]
+        st.rerun()
 
 finally:
     PageLoader.empty()

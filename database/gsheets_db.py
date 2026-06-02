@@ -80,8 +80,11 @@ def update_sheet(worksheet_name: str, df: pd.DataFrame):
             try:
                 conn.create(worksheet=ws_name, data=df)
                 st.cache_data.clear()
-            except:
-                st.error(f"Error updating/creating worksheet '{ws_name}': {e}")
+            except Exception as create_e:
+                st.error(f"Error updating/creating worksheet '{ws_name}': {create_e}")
+                raise create_e
+        else:
+            raise e
 
 def append_row(worksheet_name: str, row_dict: dict):
     """Append a single row to a worksheet"""
